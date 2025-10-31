@@ -1,0 +1,48 @@
+export const PERMISSIONS = {
+  USER_READ: 'user:read',
+  USER_WRITE: 'user:write',
+  PROJECT_READ: 'project:read',
+  PROJECT_WRITE: 'project:write',
+  TASK_READ: 'task:read',
+  TASK_WRITE: 'task:write',
+  DOCUMENT_READ: 'document:read',
+  DOCUMENT_WRITE: 'document:write',
+  AUDIT_READ: 'audit:read',
+} as const;
+
+export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+export const ROLES = {
+  SYSADMIN: 'SYSADMIN',
+  PMO: 'PMO',
+  PROJECT_MANAGER: 'PROJECT_MANAGER',
+  TEAM_MEMBER: 'TEAM_MEMBER',
+} as const;
+
+export type RoleCode = (typeof ROLES)[keyof typeof ROLES];
+
+export const ROLE_PERMISSION_MAP: Record<RoleCode, PermissionCode[]> = {
+  [ROLES.SYSADMIN]: Object.values(PERMISSIONS),
+  [ROLES.PMO]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.PROJECT_READ,
+    PERMISSIONS.PROJECT_WRITE,
+    PERMISSIONS.TASK_READ,
+    PERMISSIONS.DOCUMENT_READ,
+    PERMISSIONS.AUDIT_READ,
+  ],
+  [ROLES.PROJECT_MANAGER]: [
+    PERMISSIONS.PROJECT_READ,
+    PERMISSIONS.PROJECT_WRITE,
+    PERMISSIONS.TASK_READ,
+    PERMISSIONS.TASK_WRITE,
+    PERMISSIONS.DOCUMENT_READ,
+    PERMISSIONS.DOCUMENT_WRITE,
+  ],
+  [ROLES.TEAM_MEMBER]: [
+    PERMISSIONS.PROJECT_READ,
+    PERMISSIONS.TASK_READ,
+    PERMISSIONS.TASK_WRITE,
+    PERMISSIONS.DOCUMENT_READ,
+  ],
+};
