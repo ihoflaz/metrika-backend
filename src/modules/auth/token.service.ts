@@ -1,10 +1,9 @@
-import { SignJWT, jwtVerify } from 'jose/dist/node/cjs';
-import type { JWTPayload } from 'jose';
 import { createHash, randomBytes } from 'node:crypto';
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 import type { AppConfig } from '../../config/app-config';
 import { unauthorizedError } from '../../common/errors';
 
-export interface AccessTokenPayload extends JWTPayload {
+export interface AccessTokenPayload extends JwtPayload {
   sub: string;
   roles: string[];
   permissions: string[];
@@ -17,101 +16,113 @@ export interface TokenResult {
   expiresIn: number;
 }
 
-const encoder = new TextEncoder();
-
-const computeExpiry = (seconds: number): Date => new Date(Date.now() + seconds * 1000);
+const computeExpiry = (seconds: number): Date => new Date(Date.now() + seconds * 1_000);
 
 const hashRefreshToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex');
 
+const isAccessTokenPayload = (payload: JwtPayload): payload is AccessTokenPayload =>
+  typeof payload.sub === 'string' &&
+  payload.type === 'access' &&
+  Array.isArray(payload.roles) &&
+  Array.isArray(payload.permissions);
+
+interface RefreshTokenPayload extends JwtPayload {
+  sub: string;
+  type: 'refresh';
+}
+
+const isRefreshTokenPayload = (payload: JwtPayload): payload is RefreshTokenPayload =>
+  typeof payload.sub === 'string' && payload.type === 'refresh';
+
 export class TokenService {
   private readonly config: AppConfig;
 
-  private readonly accessSecret: Uint8Array;
-
-  private readonly refreshSecret: Uint8Array;
-
   constructor(config: AppConfig) {
     this.config = config;
-    this.accessSecret = encoder.encode(config.AUTH_ACCESS_TOKEN_SECRET);
-    this.refreshSecret = encoder.encode(config.AUTH_REFRESH_TOKEN_SECRET);
   }
 
-  async generateAccessToken(
+  generateAccessToken(
     userId: string,
     roles: string[],
     permissions: string[],
   ): Promise<TokenResult> {
     const expiresIn = this.config.AUTH_ACCESS_TOKEN_TTL;
-    const expiresAt = computeExpiry(expiresIn);
-    const token = await new SignJWT({
+    const payload: AccessTokenPayload = {
       sub: userId,
       roles,
       permissions,
       type: 'access',
-    })
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setIssuedAt()
-      .setExpirationTime(expiresIn)
-      .setAudience('metrika-api')
-      .setIssuer('metrika-backend')
-      .sign(this.accessSecret);
+    };
 
-    return { token, expiresAt, expiresIn };
-  }
-
-  async verifyAccessToken(token: string): Promise<AccessTokenPayload> {
-    const { payload } = await jwtVerify<AccessTokenPayload>(token, this.accessSecret, {
+    const token = jwt.sign(payload, this.config.AUTH_ACCESS_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn,
       audience: 'metrika-api',
       issuer: 'metrika-backend',
     });
 
-    if (payload.type !== 'access' || typeof payload.sub !== 'string') {
+    return Promise.resolve({
+      token,
+      expiresAt: computeExpiry(expiresIn),
+      expiresIn,
+    });
+  }
+
+  verifyAccessToken(token: string): Promise<AccessTokenPayload> {
+    const decoded = jwt.verify(token, this.config.AUTH_ACCESS_TOKEN_SECRET, {
+      algorithms: ['HS256'],
+      audience: 'metrika-api',
+      issuer: 'metrika-backend',
+    });
+
+    if (typeof decoded === 'string' || !isAccessTokenPayload(decoded)) {
       throw unauthorizedError('Invalid access token');
     }
 
-    return payload;
+    return Promise.resolve(decoded);
   }
 
-  async generateRefreshToken(): Promise<TokenResult & { tokenHash: string }> {
+  generateRefreshToken(): Promise<TokenResult & { tokenHash: string }> {
     const expiresIn = this.config.AUTH_REFRESH_TOKEN_TTL;
-    const expiresAt = computeExpiry(expiresIn);
     const rawToken = randomBytes(64).toString('hex');
-    const token = await new SignJWT({
-      jit: randomBytes(8).toString('hex'),
+    const payload: RefreshTokenPayload = {
+      sub: rawToken,
       type: 'refresh',
-    })
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setIssuedAt()
-      .setExpirationTime(expiresIn)
-      .setAudience('metrika-api')
-      .setIssuer('metrika-backend')
-      .setSubject(rawToken)
-      .sign(this.refreshSecret);
+      jit: randomBytes(8).toString('hex'),
+    };
 
-    return {
+    const token = jwt.sign(payload, this.config.AUTH_REFRESH_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn,
+      audience: 'metrika-api',
+      issuer: 'metrika-backend',
+    });
+
+    return Promise.resolve({
       token,
       tokenHash: hashRefreshToken(rawToken),
-      expiresAt,
+      expiresAt: computeExpiry(expiresIn),
       expiresIn,
-    };
+    });
   }
 
-  async verifyRefreshToken(token: string): Promise<{ raw: string; hash: string }> {
+  verifyRefreshToken(token: string): Promise<{ raw: string; hash: string }> {
     try {
-      const { payload } = await jwtVerify<JWTPayload>(token, this.refreshSecret, {
+      const decoded = jwt.verify(token, this.config.AUTH_REFRESH_TOKEN_SECRET, {
+        algorithms: ['HS256'],
         audience: 'metrika-api',
         issuer: 'metrika-backend',
       });
 
-      if (payload.type !== 'refresh' || typeof payload.sub !== 'string') {
+      if (typeof decoded === 'string' || !isRefreshTokenPayload(decoded)) {
         throw unauthorizedError('Invalid refresh token');
       }
 
-      return {
-        raw: payload.sub,
-        hash: hashRefreshToken(payload.sub),
-      };
+      return Promise.resolve({
+        raw: decoded.sub,
+        hash: hashRefreshToken(decoded.sub),
+      });
     } catch (error: unknown) {
       throw unauthorizedError('Invalid refresh token', { cause: error });
     }

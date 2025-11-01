@@ -27,6 +27,20 @@ const ensureEnvDefaults = () => {
   process.env.AUTH_ACCESS_TOKEN_TTL ??= '900';
   process.env.AUTH_REFRESH_TOKEN_TTL ??= '1209600';
   process.env.PASSWORD_MIN_LENGTH ??= '12';
+  process.env.SMTP_HOST ??= 'localhost';
+  process.env.SMTP_PORT ??= '1025';
+  process.env.SMTP_SECURE ??= 'false';
+  process.env.SMTP_FROM ??= 'no-reply@metrika.local';
+  process.env.SMTP_USERNAME ??= '';
+  process.env.SMTP_PASSWORD ??= '';
+  process.env.MAILHOG_BASE_URL ??= 'http://localhost:8025';
+  process.env.STORAGE_ENDPOINT ??= 'http://localhost:9000';
+  process.env.STORAGE_REGION ??= 'us-east-1';
+  process.env.STORAGE_ACCESS_KEY ??= 'minioadmin';
+  process.env.STORAGE_SECRET_KEY ??= 'minioadmin';
+  process.env.STORAGE_BUCKET ??= 'metrika-documents';
+  process.env.CLAMAV_HOST ??= 'localhost';
+  process.env.CLAMAV_PORT ??= '3310';
 };
 
 const buildTestDatabaseUrl = (baseUrl: string, schema: string) => {

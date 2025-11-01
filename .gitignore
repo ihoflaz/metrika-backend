@@ -15,8 +15,8 @@ build/
 .env.local
 .env.*.local
 .env.development
-.env.test
 .env.production
+# .env.test is intentionally tracked as it provides test defaults
 
 # IDE and Editor
 .vscode/

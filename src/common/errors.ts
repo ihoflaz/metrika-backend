@@ -79,3 +79,12 @@ export const notFoundError = (code: string, title: string, detail?: string, meta
     detail,
     meta,
   });
+
+export const conflictError = (detail: string, meta?: ErrorMeta) =>
+  createAppError({
+    status: 409,
+    code: 'RESOURCE_CONFLICT',
+    title: 'Resource conflict',
+    detail,
+    meta,
+  });

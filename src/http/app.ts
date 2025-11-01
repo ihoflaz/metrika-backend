@@ -16,6 +16,14 @@ export interface CreateAppOptions {
   config: AppConfig;
   authRouter: Router;
   userRouter: Router;
+  projectRouter: Router;
+  projectMembersRouter: Router;
+  membersRouter: Router;
+  projectTaskRouter: Router;
+  projectDocumentRouter: Router;
+  documentRouter: Router;
+  taskRouter: Router;
+  kpiRouter: Router;
   authMiddleware: RequestHandler;
 }
 
@@ -24,6 +32,14 @@ export const createApp = ({
   config,
   authRouter,
   userRouter,
+  projectRouter,
+  projectMembersRouter,
+  membersRouter,
+  projectTaskRouter,
+  projectDocumentRouter,
+  documentRouter,
+  taskRouter,
+  kpiRouter,
   authMiddleware,
 }: CreateAppOptions) => {
   const app = express();
@@ -48,6 +64,14 @@ export const createApp = ({
   app.use('/', createHealthRouter());
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', authMiddleware, userRouter);
+  app.use('/api/v1/projects', authMiddleware, projectRouter);
+  app.use('/api/v1/projects/:projectId/members', authMiddleware, projectMembersRouter);
+  app.use('/api/v1/members', authMiddleware, membersRouter);
+  app.use('/api/v1/projects/:projectId/tasks', authMiddleware, projectTaskRouter);
+  app.use('/api/v1/projects/:projectId/documents', authMiddleware, projectDocumentRouter);
+  app.use('/api/v1/documents', authMiddleware, documentRouter);
+  app.use('/api/v1/tasks', authMiddleware, taskRouter);
+  app.use('/api/v1/kpis', authMiddleware, kpiRouter);
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({

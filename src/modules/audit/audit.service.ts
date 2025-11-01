@@ -1,4 +1,4 @@
-import { PrismaClient, AuditActorType } from '@prisma/client';
+import { PrismaClient, AuditActorType, type Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 import type { Logger } from '../../lib/logger';
 
@@ -35,11 +35,11 @@ export class AuditService {
 
   async logAuthEvent(eventCode: AuditEventCode, payload: AuditEventPayload) {
     try {
-      const metadata = {
+      const metadata: Prisma.InputJsonValue = {
         ...payload.metadata,
         email: payload.email,
-        requestId: payload.context?.requestId,
-      } as Record<string, unknown>;
+        requestId: payload.context?.requestId ?? null,
+      };
 
       await this.prisma.auditLog.create({
         data: {

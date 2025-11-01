@@ -18,6 +18,137 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+enum ProjectMemberRole {
+  PM
+  LEAD
+  CONTRIBUTOR
+  REVIEWER
+}
+
+enum TaskStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  BLOCKED
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum TaskDependencyType {
+  FS
+  SF
+  FF
+  SS
+}
+
+enum DocumentType {
+  CONTRACT
+  REPORT
+  PLAN
+  REQUIREMENT
+  RISK
+  GENERIC
+  CUSTOM
+}
+
+enum DocumentClassification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum DocumentRetentionPolicy {
+  DEFAULT
+  LONG_TERM
+  LEGAL_HOLD
+}
+
+enum DocumentVersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum VirusScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  BYPASSED
+}
+
+enum DocumentApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum KPICategory {
+  FINANCIAL
+  SCHEDULE
+  QUALITY
+  RESOURCE
+  COMPLIANCE
+  CUSTOM
+}
+
+enum KPIStatus {
+  PROPOSED
+  UNDER_REVIEW
+  ACTIVE
+  MONITORING
+  BREACHED
+  RETIRED
+}
+
+enum KPIPrivacyLevel {
+  PUBLIC
+  INTERNAL
+  RESTRICTED
+}
+
+enum KPIAggregationPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum KPIDataSourceType {
+  MANUAL
+  SYSTEM
+  HYBRID
+}
+
+enum KPIValueSource {
+  MANUAL_ENTRY
+  API_INGEST
+  FILE_UPLOAD
+}
+
+enum KPIVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 model User {
   id             String          @id @db.Uuid
   email          String          @unique
@@ -32,6 +163,20 @@ model User {
   roles          UserRole[]
   refreshTokens  RefreshToken[]
   auditLogs      AuditLog[]
+  sponsoredProjects Project[]    @relation("ProjectSponsor")
+  ownedProjects     Project[]    @relation("ProjectPMO")
+  projectMemberships ProjectMember[]
+  ownedTasks        Task[]       @relation("TaskOwner")
+  reportedTasks     Task[]       @relation("TaskReporter")
+  ownedDocuments    Document[]   @relation("DocumentOwner")
+  taskComments      TaskComment[] @relation("TaskCommentAuthor")
+  taskWatchers      TaskWatcher[] @relation("TaskWatcherUser")
+  createdDocumentVersions DocumentVersion[] @relation("DocumentCreator")
+  documentApprovals DocumentApproval[]
+  stewardedKPIs     KPIDefinition[] @relation("KPISteward")
+  approvedKPIs      KPIDefinition[] @relation("KPIApprover")
+  collectedKPIData  KPISeries[]     @relation("KPIDataCollector")
+  verifiedKPIData   KPISeries[]     @relation("KPIDataVerifier")
 }
 
 model Role {
@@ -112,4 +257,233 @@ model AuditLog {
   @@index([actorId])
   @@index([eventCode])
   @@index([createdAt])
+}
+
+model Project {
+  id             String         @id @db.Uuid
+  code           String         @unique
+  name           String
+  description    String?
+  sponsorId      String         @db.Uuid
+  sponsor        User           @relation("ProjectSponsor", fields: [sponsorId], references: [id])
+  pmoOwnerId     String?        @db.Uuid
+  pmoOwner       User?          @relation("ProjectPMO", fields: [pmoOwnerId], references: [id])
+  status         ProjectStatus  @default(PLANNING)
+  startDate      DateTime
+  endDate        DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  budgetPlanned  Decimal?       @db.Decimal(14, 2)
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tasks          Task[]
+  documents      Document[]
+  members        ProjectMember[]
+
+  @@index([status])
+  @@index([startDate])
+}
+
+model ProjectMember {
+  id             String             @id @db.Uuid
+  projectId      String             @db.Uuid
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId         String             @db.Uuid
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           ProjectMemberRole
+  allocationPct  Int?               @default(0)
+  joinedAt       DateTime           @default(now())
+  leftAt         DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([projectId, userId, role])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Task {
+  id                String        @id @db.Uuid
+  projectId         String        @db.Uuid
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentTaskId      String?       @db.Uuid
+  parent            Task?         @relation("TaskHierarchy", fields: [parentTaskId], references: [id])
+  children          Task[]        @relation("TaskHierarchy")
+  title             String
+  description       String?
+  status            TaskStatus    @default(PLANNED)
+  priority          TaskPriority  @default(NORMAL)
+  ownerId           String        @db.Uuid
+  owner             User          @relation("TaskOwner", fields: [ownerId], references: [id])
+  reporterId        String?       @db.Uuid
+  reporter          User?         @relation("TaskReporter", fields: [reporterId], references: [id])
+  plannedStart      DateTime?
+  plannedEnd        DateTime?
+  actualStart       DateTime?
+  actualEnd         DateTime?
+  progressPct       Int           @default(0)
+  effortPlannedHours Decimal?
+  effortLoggedHours  Decimal?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  lastReminderSentAt DateTime?
+
+  predecessorLinks TaskDependency[] @relation("TaskDependencySource")
+  successorLinks   TaskDependency[] @relation("TaskDependencyTarget")
+  comments         TaskComment[]
+  watchers         TaskWatcher[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([ownerId])
+}
+
+model TaskDependency {
+  id              String  @id @db.Uuid
+  taskId          String  @db.Uuid
+  dependsOnTaskId String  @db.Uuid
+  type            TaskDependencyType @default(FS)
+  lagMinutes      Int?
+
+  task      Task @relation("TaskDependencySource", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskDependencyTarget", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+}
+
+model TaskComment {
+  id        String   @id @db.Uuid
+  taskId    String   @db.Uuid
+  authorId  String   @db.Uuid
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model TaskWatcher {
+  id        String   @id @db.Uuid
+  taskId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+model Document {
+  id               String                   @id @db.Uuid
+  projectId        String                   @db.Uuid
+  title            String
+  docType          DocumentType
+  classification   DocumentClassification
+  ownerId          String                   @db.Uuid
+  storageKey       String
+  currentVersionId String?                  @db.Uuid @unique
+  tags             String[]                 @default([])
+  linkedTaskIds    String[]                 @default([])
+  linkedKpiIds     String[]                 @default([])
+  retentionPolicy  DocumentRetentionPolicy
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner         User            @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  versions      DocumentVersion[]
+  currentVersion DocumentVersion? @relation("DocumentCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+}
+
+model DocumentVersion {
+  id              String                 @id @db.Uuid
+  documentId      String                 @db.Uuid
+  versionNo       String
+  status          DocumentVersionStatus  @default(IN_REVIEW)
+  checksum        String
+  sizeBytes       BigInt
+  mimeType        String
+  storageKey      String
+  virusScanStatus VirusScanStatus        @default(PENDING)
+  approvalChain   Json?
+  createdBy       String                 @db.Uuid
+  createdAt       DateTime               @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  creator  User     @relation("DocumentCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  approvals DocumentApproval[]
+  currentFor Document? @relation("DocumentCurrentVersion")
+}
+
+model DocumentApproval {
+  id         String                    @id @db.Uuid
+  versionId  String                    @db.Uuid
+  approverId String                    @db.Uuid
+  decision   DocumentApprovalDecision
+  comment    String?
+  decidedAt  DateTime                  @default(now())
+
+  version  DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  approver User            @relation(fields: [approverId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, approverId])
+}
+
+model KPIDefinition {
+  id                     String                @id @db.Uuid
+  code                   String                @unique @db.VarChar(20)
+  name                   String                @db.VarChar(160)
+  description            String?
+  category               KPICategory
+  calculationFormula     String
+  targetValue            Decimal               @db.Decimal(20, 4)
+  unit                   String                @db.VarChar(32)
+  thresholdWarning       Decimal?              @db.Decimal(20, 4)
+  thresholdCritical      Decimal?              @db.Decimal(20, 4)
+  aggregationPeriod      KPIAggregationPeriod
+  dataSourceType         KPIDataSourceType
+  dataSourceReference    Json?
+  stewardId              String                @db.Uuid
+  approverId             String?               @db.Uuid
+  status                 KPIStatus             @default(PROPOSED)
+  privacyLevel           KPIPrivacyLevel       @default(INTERNAL)
+  linkedProjectIds       String[]              @default([])
+  linkedTaskIds          String[]              @default([])
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  steward   User  @relation("KPISteward", fields: [stewardId], references: [id], onDelete: Cascade)
+  approver  User? @relation("KPIApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  series    KPISeries[]
+
+  @@index([category])
+  @@index([status])
+  @@index([stewardId])
+}
+
+model KPISeries {
+  id                   String                  @id @db.Uuid
+  kpiId                String                  @db.Uuid
+  periodStart          DateTime                @db.Date
+  periodEnd            DateTime                @db.Date
+  actualValue          Decimal                 @db.Decimal(20, 4)
+  valueSource          KPIValueSource
+  collectedAt          DateTime                @default(now())
+  collectedBy          String?                 @db.Uuid
+  verificationStatus   KPIVerificationStatus   @default(PENDING)
+  verificationNotes    String?
+  verifiedBy           String?                 @db.Uuid
+  verifiedAt           DateTime?
+
+  kpi        KPIDefinition @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  collector  User?         @relation("KPIDataCollector", fields: [collectedBy], references: [id], onDelete: SetNull)
+  verifier   User?         @relation("KPIDataVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+
+  @@index([kpiId, periodStart])
+  @@index([collectedAt])
 }
