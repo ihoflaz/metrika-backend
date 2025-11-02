@@ -25,3 +25,6 @@ export const createLogger = (options: LoggerOptions = {}): Logger => {
         : undefined,
   });
 };
+
+// Default logger instance
+export const logger = createLogger();

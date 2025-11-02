@@ -1,0 +1,156 @@
+<meta name="subject" content="📋 Yeni Görev Atandı: {{taskTitle}}" />
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #374151;
+      background-color: #F3F4F6;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      color: #FFFFFF;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .info-box {
+      background-color: #EFF6FF;
+      border-left: 4px solid #3B82F6;
+      padding: 16px;
+      margin: 16px 0;
+      border-radius: 4px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .info-item {
+      background-color: #F9FAFB;
+      padding: 16px;
+      border-radius: 6px;
+    }
+    .info-item strong {
+      color: #1F2937;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-item span {
+      color: #374151;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .button {
+      display: inline-block;
+      background-color: #3B82F6;
+      color: #FFFFFF !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 16px 0;
+    }
+    .footer {
+      background-color: #F9FAFB;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #6B7280;
+      border-top: 1px solid #E5E7EB;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📋 Yeni Görev Atandı</h1>
+      <p>Size yeni bir görev atandı</p>
+    </div>
+    <div class="content">
+      <div class="info-box">
+        <p style="margin: 0; color: #1E40AF;">
+          <strong>{{assignerName}}</strong> tarafından size yeni bir görev atandı.
+        </p>
+      </div>
+
+      <h2 style="color: #1F2937; margin: 24px 0 16px;">Görev Detayları</h2>
+      
+      <div class="info-grid">
+        <div class="info-item">
+          <strong>Görev Adı</strong>
+          <span>{{taskTitle}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Proje</strong>
+          <span>{{projectName}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Öncelik</strong>
+          <span>{{priority}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Durum</strong>
+          <span>{{status}}</span>
+        </div>
+      </div>
+
+      {{#if description}}
+      <div style="margin: 24px 0;">
+        <strong style="display: block; margin-bottom: 8px; color: #1F2937;">Açıklama:</strong>
+        <p style="margin: 0; color: #6B7280;">{{description}}</p>
+      </div>
+      {{/if}}
+
+      {{#if plannedStart}}
+      <div style="margin: 16px 0;">
+        <strong style="color: #1F2937;">Planlanan Başlangıç:</strong> {{plannedStart}}
+      </div>
+      {{/if}}
+
+      {{#if plannedEnd}}
+      <div style="margin: 16px 0;">
+        <strong style="color: #1F2937;">Planlanan Bitiş:</strong> {{plannedEnd}}
+      </div>
+      {{/if}}
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{{taskUrl}}" class="button">Görevi Görüntüle</a>
+      </div>
+
+      <p style="font-size: 14px; color: #6B7280; margin-top: 24px;">
+        Lütfen görevi inceleyin ve gerekli aksiyonları alın.
+      </p>
+    </div>
+    <div class="footer">
+      <p>Bu e-posta <strong>Metrika PMO</strong> tarafından otomatik olarak gönderilmiştir.</p>
+      <p style="margin-top: 8px; color: #9CA3AF;">© 2025 Metrika PMO. Tüm hakları saklıdır.</p>
+    </div>
+  </div>
+</body>
+</html>

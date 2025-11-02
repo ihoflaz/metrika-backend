@@ -309,6 +309,118 @@ export class DocumentsController {
     });
   };
 
+  /**
+   * Link a document to a task
+   * POST /api/v1/documents/:documentId/link-task
+   */
+  linkToTask = async (req: Request, res: Response) => {
+    const linkSchema = z.object({
+      taskId: z.string().uuid(),
+    });
+
+    const parsed = linkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw validationError(parsed.error.flatten().fieldErrors);
+    }
+
+    const { authUser } = res.locals as { authUser: AuthenticatedRequestUser };
+    const link = await this.documentService.linkDocumentToTask(
+      req.params.documentId,
+      parsed.data.taskId,
+      authUser.id,
+    );
+
+    res.status(201).json({
+      data: {
+        type: 'document-task-link',
+        id: link.id,
+        attributes: {
+          documentId: link.documentId,
+          taskId: link.taskId,
+          linkedBy: link.linkedBy,
+          linkedAt: link.linkedAt.toISOString(),
+          document: {
+            id: link.document.id,
+            title: link.document.title,
+            docType: link.document.docType,
+          },
+          task: {
+            id: link.task.id,
+            title: link.task.title,
+            status: link.task.status,
+          },
+        },
+      },
+      meta: { requestId: getRequestId(res) },
+    });
+  };
+
+  /**
+   * Unlink a document from a task
+   * DELETE /api/v1/documents/:documentId/unlink-task/:taskId
+   */
+  unlinkFromTask = async (req: Request, res: Response) => {
+    const result = await this.documentService.unlinkDocumentFromTask(
+      req.params.documentId,
+      req.params.taskId,
+    );
+
+    res.status(200).json({
+      data: {
+        type: 'document-task-unlink',
+        attributes: {
+          success: result.success,
+          linkId: result.linkId,
+        },
+      },
+      meta: { requestId: getRequestId(res) },
+    });
+  };
+
+  /**
+   * Get all tasks linked to a document
+   * GET /api/v1/documents/:documentId/tasks
+   */
+  getLinkedTasks = async (req: Request, res: Response) => {
+    const links = await this.documentService.getTasksForDocument(req.params.documentId);
+
+    res.status(200).json({
+      data: links.map((link) => ({
+        type: 'document-task-link',
+        id: link.id,
+        attributes: {
+          linkedAt: link.linkedAt.toISOString(),
+          task: {
+            id: link.task.id,
+            title: link.task.title,
+            description: link.task.description,
+            status: link.task.status,
+            priority: link.task.priority,
+            plannedStart: link.task.plannedStart?.toISOString(),
+            plannedEnd: link.task.plannedEnd?.toISOString(),
+            progressPct: link.task.progressPct,
+            owner: {
+              id: link.task.owner.id,
+              fullName: link.task.owner.fullName,
+              email: link.task.owner.email,
+            },
+            project: {
+              id: link.task.project.id,
+              code: link.task.project.code,
+              name: link.task.project.name,
+            },
+          },
+          linkedBy: {
+            id: link.linker.id,
+            fullName: link.linker.fullName,
+            email: link.linker.email,
+          },
+        },
+      })),
+      meta: { requestId: getRequestId(res) },
+    });
+  };
+
   private static mapFilePayload(file: Express.Multer.File): UploadFilePayload {
     return {
       buffer: file.buffer,

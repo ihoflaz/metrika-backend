@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { TaskPriority, TaskStatus, TaskDependencyType } from '@prisma/client';
 import type { TaskService } from '../../../modules/tasks/task.service';
+import type { DocumentService } from '../../../modules/documents/document.service';
 import { validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 
@@ -145,9 +146,11 @@ const serializeDependency = (dependency: Awaited<ReturnType<TaskService['createD
 
 export class TasksController {
   private readonly taskService: TaskService;
+  private readonly documentService: DocumentService;
 
-  constructor(taskService: TaskService) {
+  constructor(taskService: TaskService, documentService: DocumentService) {
     this.taskService = taskService;
+    this.documentService = documentService;
   }
 
   create = async (req: Request, res: Response) => {
@@ -215,5 +218,57 @@ export class TasksController {
     await this.taskService.deleteDependency(req.params.taskId, req.params.dependencyId);
 
     res.status(204).send();
+  };
+
+  /**
+   * Get all documents linked to a task
+   * GET /api/v1/tasks/:taskId/documents
+   */
+  getLinkedDocuments = async (req: Request, res: Response) => {
+    const links = await this.documentService.getDocumentsForTask(req.params.taskId);
+
+    res.status(200).json({
+      data: links.map((link) => ({
+        type: 'document-task-link',
+        id: link.id,
+        attributes: {
+          linkedAt: link.linkedAt.toISOString(),
+          document: {
+            id: link.document.id,
+            title: link.document.title,
+            docType: link.document.docType,
+            classification: link.document.classification,
+            tags: link.document.tags,
+            retentionPolicy: link.document.retentionPolicy,
+            createdAt: link.document.createdAt.toISOString(),
+            currentVersion: link.document.currentVersion
+              ? {
+                  id: link.document.currentVersion.id,
+                  versionNo: link.document.currentVersion.versionNo,
+                  status: link.document.currentVersion.status,
+                  sizeBytes: link.document.currentVersion.sizeBytes.toString(),
+                  mimeType: link.document.currentVersion.mimeType,
+                }
+              : null,
+            owner: {
+              id: link.document.owner.id,
+              fullName: link.document.owner.fullName,
+              email: link.document.owner.email,
+            },
+            project: {
+              id: link.document.project.id,
+              code: link.document.project.code,
+              name: link.document.project.name,
+            },
+          },
+          linkedBy: {
+            id: link.linker.id,
+            fullName: link.linker.fullName,
+            email: link.linker.email,
+          },
+        },
+      })),
+      meta: { requestId: getRequestId(res) },
+    });
   };
 }

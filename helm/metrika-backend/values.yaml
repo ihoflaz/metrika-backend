@@ -1,0 +1,146 @@
+# Default values for metrika-backend
+replicaCount: 3
+
+image:
+  repository: metrika-backend
+  pullPolicy: Always
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1001
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.metrika.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: metrika-backend-tls
+      hosts:
+        - api.metrika.io
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application Configuration
+config:
+  appHost: "0.0.0.0"
+  appPort: "3000"
+  nodeEnv: "production"
+  logLevel: "info"
+  auth:
+    accessTokenTTL: "900"
+    refreshTokenTTL: "1209600"
+  password:
+    minLength: "12"
+  smtp:
+    port: "587"
+    secure: "true"
+    from: "no-reply@metrika.io"
+  storage:
+    region: "us-east-1"
+    bucket: "metrika-documents"
+  clamav:
+    host: "clamav-service"
+    port: "3310"
+
+# Secrets (should be overridden in prod)
+secrets:
+  databaseUrl: "postgresql://metrika:changeme@postgres-service:5432/metrika?schema=public"
+  authAccessTokenSecret: "change-this-secret-in-production"
+  authRefreshTokenSecret: "change-this-refresh-secret-in-production"
+  smtp:
+    host: "smtp.example.com"
+    username: "your-smtp-username"
+    password: "your-smtp-password"
+  mailhogBaseUrl: "http://mailhog:8025"
+  storage:
+    endpoint: "https://s3.amazonaws.com"
+    accessKey: "your-access-key"
+    secretKey: "your-secret-key"
+
+# PostgreSQL dependency
+postgresql:
+  enabled: true
+  auth:
+    username: metrika
+    password: changeme
+    database: metrika
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Redis dependency
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

@@ -7,6 +7,7 @@ import { seedCoreRbac } from '../../src/modules/rbac/seed';
 import { buildContainer, type AppDependencies } from '../../src/di/container';
 import { loadAppConfig } from '../../src/config/app-config';
 import { initializeEnv } from '../../src/config/env';
+import { getQueueService } from '../../src/modules/automation/queue.service';
 
 export interface TestAppContext {
   container: AwilixContainer<AppDependencies>;
@@ -92,10 +93,42 @@ export const teardownTestApp = async ({
   schemaName,
   originalDatabaseUrl,
 }: TestAppContext) => {
-  await container.dispose();
-  await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
-  await prisma.$disconnect();
+  try {
+    // Close QueueService singleton (closes all Redis connections)
+    const queueService = getQueueService();
+    await queueService.close();
+  } catch (error) {
+    console.error('Error closing QueueService:', error);
+  }
+
+  try {
+    // Dispose container first (closes connections, workers, etc.)
+    await container.dispose();
+  } catch (error) {
+    console.error('Error disposing container:', error);
+  }
+
+  try {
+    // Drop test schema
+    await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+  } catch (error) {
+    console.error('Error dropping schema:', error);
+  }
+
+  try {
+    // Disconnect Prisma client
+    await prisma.$disconnect();
+  } catch (error) {
+    console.error('Error disconnecting Prisma:', error);
+  }
+
+  // Restore original DATABASE_URL
   if (originalDatabaseUrl) {
     process.env.DATABASE_URL = originalDatabaseUrl;
+  }
+
+  // Force garbage collection if available
+  if (global.gc) {
+    global.gc();
   }
 };

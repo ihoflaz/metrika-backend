@@ -9,6 +9,7 @@ import { TokenService } from '../modules/auth/token.service';
 import { AuthService } from '../modules/auth/auth.service';
 import { AuditService } from '../modules/audit/audit.service';
 import { UserService } from '../modules/users/user.service';
+import { ApiKeyService } from '../modules/users/api-key.service';
 import { ProjectService } from '../modules/projects/project.service';
 import { ProjectMemberService } from '../modules/projects/project-member.service';
 import { TaskService } from '../modules/tasks/task.service';
@@ -22,8 +23,10 @@ import { DocumentApprovalQueueService } from '../modules/documents/document-appr
 import { EmailService } from '../modules/notifications/email.service';
 import { KPIService } from '../modules/kpi/kpi.service';
 import { KPIMonitoringQueueService } from '../modules/kpi/kpi-monitoring-queue.service';
+import { ReportService } from '../modules/reports/report.service';
 import { AuthController } from '../http/controllers/auth/auth.controller';
 import { UsersController } from '../http/controllers/user/users.controller';
+import { ApiKeysController } from '../http/controllers/user/api-keys.controller';
 import { ProjectsController } from '../http/controllers/project/projects.controller';
 import { ProjectMembersController } from '../http/controllers/project/project-members.controller';
 import { TasksController } from '../http/controllers/task/tasks.controller';
@@ -31,8 +34,11 @@ import { TaskWatchersController } from '../http/controllers/task/task-watchers.c
 import { TaskCommentsController } from '../http/controllers/task/task-comments.controller';
 import { DocumentsController } from '../http/controllers/document/documents.controller';
 import { KPIController } from '../http/controllers/kpi/kpi.controller';
+import { ReportsController } from '../http/controllers/report/reports.controller';
+import { AuditController } from '../http/controllers/audit/audit.controller';
 import { createAuthRouter } from '../http/routes/auth.routes';
 import { createUserRouter } from '../http/routes/user.routes';
+import { createApiKeysRouter } from '../http/routes/user/api-keys.routes';
 import { createProjectRouter } from '../http/routes/project/project.routes';
 import {
   createProjectMembersRouter,
@@ -44,6 +50,15 @@ import {
   createProjectDocumentRouter,
 } from '../http/routes/document/document.routes';
 import { createKPIRouter } from '../http/routes/kpi/kpi.routes';
+import { createReportsRouter } from '../http/routes/report/report.routes';
+import { createAuditRouter } from '../http/routes/audit/audit.routes';
+import { createQueueRouter } from '../http/routes/queue/queue.routes';
+import { KanbanService } from '../modules/kanban/kanban.service';
+import { KanbanController } from '../modules/kanban/kanban.controller';
+import { createKanbanRouter } from '../modules/kanban/kanban.routes';
+import { createExportRouter } from '../http/routes/export/export.routes';
+import { createMonitoringRouter } from '../http/routes/monitoring/queue.routes';
+import { createUnsubscribeRouter } from '../http/routes/unsubscribe.routes';
 import { createAuthenticationMiddleware } from '../http/middleware/auth/authentication';
 
 export interface AppDependencies {
@@ -53,6 +68,7 @@ export interface AppDependencies {
   tokenService: TokenService;
   auditService: AuditService;
   userService: UserService;
+  apiKeyService: ApiKeyService;
   projectService: ProjectService;
   projectMemberService: ProjectMemberService;
   taskService: TaskService;
@@ -66,9 +82,11 @@ export interface AppDependencies {
   emailService: EmailService;
   kpiService: KPIService;
   kpiMonitoringQueueService: KPIMonitoringQueueService;
+  reportService: ReportService;
   authService: AuthService;
   authController: AuthController;
   usersController: UsersController;
+  apiKeysController: ApiKeysController;
   projectsController: ProjectsController;
   projectMembersController: ProjectMembersController;
   tasksController: TasksController;
@@ -76,8 +94,13 @@ export interface AppDependencies {
   taskCommentsController: TaskCommentsController;
   documentsController: DocumentsController;
   kpiController: KPIController;
+  reportsController: ReportsController;
+  auditController: AuditController;
+  kanbanService: KanbanService;
+  kanbanController: KanbanController;
   authRouter: Router;
   userRouter: Router;
+  apiKeysRouter: Router;
   projectRouter: Router;
   projectMembersRouter: Router;
   membersRouter: Router;
@@ -86,6 +109,13 @@ export interface AppDependencies {
   projectDocumentRouter: Router;
   documentRouter: Router;
   kpiRouter: Router;
+  reportsRouter: Router;
+  auditRouter: Router;
+  queueRouter: Router;
+  kanbanRouter: Router;
+  exportRouter: Router;
+  monitoringRouter: Router;
+  unsubscribeRouter: Router;
   authMiddleware: RequestHandler;
   app: ReturnType<typeof createApp>;
 }
@@ -117,6 +147,9 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     userService: asFunction(
       ({ prisma }: Pick<AppDependencies, 'prisma'>) => new UserService(prisma),
     ).singleton(),
+    apiKeyService: asFunction(
+      ({ prisma }: Pick<AppDependencies, 'prisma'>) => new ApiKeyService(prisma),
+    ).singleton(),
     projectService: asFunction(
       ({ prisma }: Pick<AppDependencies, 'prisma'>) => new ProjectService(prisma),
     ).singleton(),
@@ -134,6 +167,10 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     kpiService: asFunction(
       ({ prisma, logger }: Pick<AppDependencies, 'prisma' | 'logger'>) =>
         new KPIService(prisma, logger),
+    ).singleton(),
+    reportService: asFunction(
+      ({ prisma, logger }: Pick<AppDependencies, 'prisma' | 'logger'>) =>
+        new ReportService(prisma, logger),
     ).singleton(),
     kpiMonitoringQueueService: asFunction(
       ({
@@ -262,6 +299,10 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     usersController: asFunction(
       ({ userService }: Pick<AppDependencies, 'userService'>) => new UsersController(userService),
     ).singleton(),
+    apiKeysController: asFunction(
+      ({ apiKeyService, logger }: Pick<AppDependencies, 'apiKeyService' | 'logger'>) =>
+        new ApiKeysController(apiKeyService, logger),
+    ).singleton(),
     projectsController: asFunction(
       ({ projectService }: Pick<AppDependencies, 'projectService'>) =>
         new ProjectsController(projectService),
@@ -271,7 +312,8 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
         new ProjectMembersController(projectMemberService),
     ).singleton(),
     tasksController: asFunction(
-      ({ taskService }: Pick<AppDependencies, 'taskService'>) => new TasksController(taskService),
+      ({ taskService, documentService }: Pick<AppDependencies, 'taskService' | 'documentService'>) =>
+        new TasksController(taskService, documentService),
     ).singleton(),
     taskWatchersController: asFunction(
       ({ taskWatcherService }: Pick<AppDependencies, 'taskWatcherService'>) =>
@@ -288,6 +330,21 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     kpiController: asFunction(
       ({ kpiService }: Pick<AppDependencies, 'kpiService'>) => new KPIController(kpiService),
     ).singleton(),
+    reportsController: asFunction(
+      ({ reportService }: Pick<AppDependencies, 'reportService'>) =>
+        new ReportsController(reportService),
+    ).singleton(),
+    auditController: asFunction(
+      ({ auditService, logger }: Pick<AppDependencies, 'auditService' | 'logger'>) =>
+        new AuditController(auditService, logger),
+    ).singleton(),
+    kanbanService: asFunction(
+      ({ prisma }: Pick<AppDependencies, 'prisma'>) => new KanbanService(prisma),
+    ).singleton(),
+    kanbanController: asFunction(
+      ({ kanbanService }: Pick<AppDependencies, 'kanbanService'>) =>
+        new KanbanController(kanbanService),
+    ).singleton(),
     authMiddleware: asFunction(
       ({
         tokenService,
@@ -299,8 +356,9 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     authRouter: asFunction(({ authController }: Pick<AppDependencies, 'authController'>) =>
       createAuthRouter(authController),
     ).singleton(),
-    userRouter: asFunction(({ usersController }: Pick<AppDependencies, 'usersController'>) =>
-      createUserRouter(usersController),
+    apiKeysRouter: asFunction((deps: AppDependencies) => createApiKeysRouter(deps)).singleton(),
+    userRouter: asFunction(({ usersController, apiKeysRouter }: Pick<AppDependencies, 'usersController' | 'apiKeysRouter'>) =>
+      createUserRouter({ usersController, apiKeysRouter }),
     ).singleton(),
     projectRouter: asFunction(
       ({ projectsController }: Pick<AppDependencies, 'projectsController'>) =>
@@ -338,6 +396,22 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
     kpiRouter: asFunction(({ kpiController }: Pick<AppDependencies, 'kpiController'>) =>
       createKPIRouter(kpiController),
     ).singleton(),
+    reportsRouter: asFunction(
+      ({ reportsController }: Pick<AppDependencies, 'reportsController'>) =>
+        createReportsRouter(reportsController),
+    ).singleton(),
+    auditRouter: asFunction(
+      ({ auditController, authMiddleware }: Pick<AppDependencies, 'auditController' | 'authMiddleware'>) =>
+        createAuditRouter(auditController, authMiddleware),
+    ).singleton(),
+    queueRouter: asFunction(() => createQueueRouter()).singleton(),
+    kanbanRouter: asFunction(
+      ({ kanbanController }: Pick<AppDependencies, 'kanbanController'>) =>
+        createKanbanRouter(kanbanController),
+    ).singleton(),
+    exportRouter: asFunction(() => createExportRouter()).singleton(),
+    monitoringRouter: asFunction(() => createMonitoringRouter()).singleton(),
+    unsubscribeRouter: asFunction(() => createUnsubscribeRouter()).singleton(),
     app: asFunction(
       ({
         logger,
@@ -352,6 +426,13 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
         documentRouter,
         taskRouter,
         kpiRouter,
+        reportsRouter,
+        auditRouter,
+        queueRouter,
+        kanbanRouter,
+        exportRouter,
+        monitoringRouter,
+        unsubscribeRouter,
         authMiddleware,
       }: Pick<
         AppDependencies,
@@ -367,11 +448,19 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
         | 'documentRouter'
         | 'taskRouter'
         | 'kpiRouter'
+        | 'reportsRouter'
+        | 'auditRouter'
+        | 'queueRouter'
+        | 'kanbanRouter'
+        | 'exportRouter'
+        | 'monitoringRouter'
+        | 'unsubscribeRouter'
         | 'authMiddleware'
       >) =>
         createApp({
           logger,
           config,
+          container,
           authRouter,
           userRouter,
           projectRouter,
@@ -382,6 +471,13 @@ export const buildContainer = (): AwilixContainer<AppDependencies> => {
           documentRouter,
           taskRouter,
           kpiRouter,
+          reportsRouter,
+          auditRouter,
+          queueRouter,
+          kanbanRouter,
+          exportRouter,
+          monitoringRouter,
+          unsubscribeRouter,
           authMiddleware,
         }),
     ).singleton(),

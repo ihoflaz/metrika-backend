@@ -1,0 +1,126 @@
+<meta name="subject" content="📄 Onay Bekleyen Doküman: {{documentTitle}}" />
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #374151;
+      background-color: #F3F4F6;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+      color: #FFFFFF;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .document-box {
+      background-color: #FFFBEB;
+      border-left: 4px solid #F59E0B;
+      padding: 20px;
+      margin: 16px 0;
+      border-radius: 4px;
+    }
+    .info-item {
+      margin: 12px 0;
+    }
+    .info-item strong {
+      color: #1F2937;
+      display: inline-block;
+      min-width: 150px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #F59E0B;
+      color: #FFFFFF !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 16px 0;
+    }
+    .footer {
+      background-color: #F9FAFB;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #6B7280;
+      border-top: 1px solid #E5E7EB;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📄 Doküman Onayı</h1>
+      <p>İncelemeniz Bekleniyor</p>
+    </div>
+    <div class="content">
+      <p>Merhaba,</p>
+      <p>Aşağıdaki doküman <strong>{{pendingDays}} gündür</strong> onay bekliyor. Lütfen dokümanı inceleyin ve onaylayın veya reddedin.</p>
+
+      <div class="document-box">
+        <h3 style="margin: 0 0 16px; color: #92400E;">{{documentTitle}}</h3>
+        <div class="info-item">
+          <strong>Doküman Türü:</strong>
+          <span>{{documentType}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Versiyon:</strong>
+          <span>{{version}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Yükleyen:</strong>
+          <span>{{uploaderName}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Bekleme Süresi:</strong>
+          <span style="color: #D97706; font-weight: 600;">{{pendingDays}} gün</span>
+        </div>
+      </div>
+
+      {{#if (gt pendingDays 7)}}
+      <div style="background-color: #FEE2E2; border-left: 4px solid #DC2626; padding: 16px; margin: 16px 0; border-radius: 4px;">
+        <strong style="color: #991B1B;">⚠️ Dikkat!</strong>
+        <p style="margin: 8px 0 0; color: #7F1D1D;">
+          Bu doküman 7 günden fazla süredir onay bekliyor. Lütfen acil olarak işlem yapın.
+        </p>
+      </div>
+      {{/if}}
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{{documentUrl}}" class="button">Dokümanı İncele</a>
+      </div>
+
+      <p style="font-size: 14px; color: #6B7280; margin-top: 24px;">
+        Dokümanı onaylamak veya reddetmek için yukarıdaki butona tıklayın.
+      </p>
+    </div>
+    <div class="footer">
+      <p>Bu e-posta <strong>Metrika PMO</strong> tarafından otomatik olarak gönderilmiştir.</p>
+      <p style="margin-top: 8px; color: #9CA3AF;">© 2025 Metrika PMO. Tüm hakları saklıdır.</p>
+    </div>
+  </div>
+</body>
+</html>

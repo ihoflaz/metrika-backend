@@ -23,6 +23,16 @@ export type AuditEventCode =
   | 'AUTH_REFRESH_SUCCESS'
   | 'AUTH_REFRESH_FAILED';
 
+export type ExportFormat = 'json' | 'csv';
+
+export interface AuditExportFilters {
+  startDate?: Date;
+  endDate?: Date;
+  actorId?: string;
+  eventCode?: string;
+  actorType?: AuditActorType;
+}
+
 export class AuditService {
   private readonly prisma: PrismaClient;
 
@@ -56,5 +66,110 @@ export class AuditService {
     } catch (error: unknown) {
       this.logger.error({ error, eventCode, payload }, 'Failed to write audit log');
     }
+  }
+
+  /**
+   * Export audit logs with filtering options
+   * Supports JSON and CSV formats
+   */
+  async exportAuditLogs(filters: AuditExportFilters, format: ExportFormat = 'json'): Promise<string> {
+    try {
+      // Build where clause
+      const where: Prisma.AuditLogWhereInput = {};
+
+      if (filters.startDate || filters.endDate) {
+        where.createdAt = {};
+        if (filters.startDate) {
+          where.createdAt.gte = filters.startDate;
+        }
+        if (filters.endDate) {
+          where.createdAt.lte = filters.endDate;
+        }
+      }
+
+      if (filters.actorId) {
+        where.actorId = filters.actorId;
+      }
+
+      if (filters.eventCode) {
+        where.eventCode = filters.eventCode;
+      }
+
+      if (filters.actorType) {
+        where.actorType = filters.actorType;
+      }
+
+      // Fetch audit logs with user details
+      const logs = await this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      });
+
+      this.logger.info({ count: logs.length, format, filters }, 'Exporting audit logs');
+
+      if (format === 'csv') {
+        return this.convertToCSV(logs);
+      }
+
+      return JSON.stringify(logs, null, 2);
+    } catch (error: unknown) {
+      this.logger.error({ error, filters, format }, 'Failed to export audit logs');
+      throw error;
+    }
+  }
+
+  /**
+   * Convert audit logs to CSV format
+   */
+  private convertToCSV(logs: any[]): string {
+    if (logs.length === 0) {
+      return 'id,actorType,actorId,actorEmail,actorName,eventCode,description,ipAddress,userAgent,createdAt\n';
+    }
+
+    const headers = [
+      'id',
+      'actorType',
+      'actorId',
+      'actorEmail',
+      'actorName',
+      'eventCode',
+      'description',
+      'ipAddress',
+      'userAgent',
+      'createdAt',
+    ];
+
+    const rows = logs.map((log) => {
+      const actorName = log.user?.fullName || '';
+      
+      return [
+        log.id,
+        log.actorType,
+        log.actorId || '',
+        log.user?.email || '',
+        actorName,
+        log.eventCode,
+        (log.description || '').replace(/"/g, '""'), // Escape quotes
+        log.ipAddress || '',
+        (log.userAgent || '').replace(/"/g, '""'), // Escape quotes
+        log.createdAt.toISOString(),
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    return csvContent;
   }
 }

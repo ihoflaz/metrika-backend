@@ -1,0 +1,244 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Warm-up phase: Gradually increase load
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm-up"
+    
+    # Sustained load: Maintain constant load
+    - duration: 300  # 5 minutes
+      arrivalRate: 50
+      name: "Sustained load - 50 req/sec"
+    
+    # Spike test: Sudden load increase
+    - duration: 60
+      arrivalRate: 100
+      name: "Spike test - 100 req/sec"
+    
+    # Cool-down: Reduce load
+    - duration: 60
+      arrivalRate: 10
+      name: "Cool-down"
+
+  # Load testing plugins
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+
+  # Performance thresholds
+  ensure:
+    # Response time targets
+    p95: 2000  # 95th percentile < 2 seconds
+    p99: 3000  # 99th percentile < 3 seconds
+    
+    # Error rate target
+    maxErrorRate: 1  # < 1% error rate
+
+  # HTTP settings
+  http:
+    timeout: 10
+
+  # Environment variables
+  variables:
+    apiBaseUrl: "http://localhost:3000/api/v1"
+
+  # Processor for custom logic
+  processor: "./bulk-operations-processor.js"
+
+scenarios:
+  # Scenario 1: Bulk Task Creation
+  - name: "Bulk Task Creation - 50 tasks"
+    weight: 30
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Create 50 tasks in bulk
+      - post:
+          url: "/api/v1/tasks/bulk"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            tasks:
+              - name: "Load Test Task {{ $randomString(10) }}"
+                description: "This is a load test task"
+                status: "PLANNED"
+                priority: "MEDIUM"
+                projectId: 1
+                startDate: "2025-01-15T00:00:00.000Z"
+                dueDate: "2025-02-15T00:00:00.000Z"
+                estimatedHours: 8
+          expect:
+            - statusCode: 201
+            - contentType: json
+            - hasProperty: "createdCount"
+
+  # Scenario 2: Bulk Task Updates
+  - name: "Bulk Task Update - 20 tasks"
+    weight: 25
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get tasks to update
+      - get:
+          url: "/api/v1/tasks?limit=20"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "taskId1"
+            - json: "$[1].id"
+              as: "taskId2"
+          expect:
+            - statusCode: 200
+
+      # Bulk update tasks
+      - patch:
+          url: "/api/v1/tasks/bulk"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            updates:
+              - id: "{{ taskId1 }}"
+                status: "IN_PROGRESS"
+                priority: "HIGH"
+              - id: "{{ taskId2 }}"
+                status: "IN_PROGRESS"
+                priority: "HIGH"
+          expect:
+            - statusCode: 200
+            - hasProperty: "updatedCount"
+
+  # Scenario 3: Bulk Task Assignment
+  - name: "Bulk Task Assignment - 30 tasks"
+    weight: 20
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get tasks
+      - get:
+          url: "/api/v1/tasks?limit=30"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[*].id"
+              as: "taskIds"
+          expect:
+            - statusCode: 200
+
+      # Bulk assign tasks
+      - post:
+          url: "/api/v1/tasks/bulk-assign"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskIds: "{{ taskIds }}"
+            assigneeId: 3
+          expect:
+            - statusCode: 200
+            - hasProperty: "assignedCount"
+
+  # Scenario 4: Bulk Task Deletion (Soft Delete)
+  - name: "Bulk Task Deletion - 10 tasks"
+    weight: 15
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get tasks to delete
+      - get:
+          url: "/api/v1/tasks?status=COMPLETED&limit=10"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[*].id"
+              as: "taskIds"
+          expect:
+            - statusCode: 200
+
+      # Bulk delete tasks
+      - delete:
+          url: "/api/v1/tasks/bulk"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskIds: "{{ taskIds }}"
+          expect:
+            - statusCode: 200
+            - hasProperty: "deletedCount"
+
+  # Scenario 5: Bulk Comment Creation
+  - name: "Bulk Task Comments - 20 comments"
+    weight: 10
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get a task
+      - get:
+          url: "/api/v1/tasks/1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.id"
+              as: "taskId"
+          expect:
+            - statusCode: 200
+
+      # Create comment
+      - post:
+          url: "/api/v1/tasks/{{ taskId }}/comments"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            content: "Load test comment {{ $randomString(20) }}"
+          expect:
+            - statusCode: 201

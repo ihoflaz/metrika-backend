@@ -14,6 +14,9 @@ const config: Config = {
   reporters: ['default'],
   clearMocks: true,
   verbose: false,
+  testTimeout: 30000, // 30 seconds timeout per test
+  forceExit: true, // Force Jest to exit after all tests complete
+  detectOpenHandles: true, // Detect open handles that prevent Jest from exiting
 };
 
 export default config;

@@ -1,0 +1,44 @@
+# Development Environment Values
+replicaCount: 1
+
+image:
+  tag: "dev"
+
+config:
+  nodeEnv: "development"
+  logLevel: "debug"
+
+autoscaling:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+ingress:
+  enabled: true
+  hosts:
+    - host: api-dev.metrika.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: metrika-backend-dev-tls
+      hosts:
+        - api-dev.metrika.io
+
+postgresql:
+  auth:
+    password: dev-password
+  primary:
+    persistence:
+      enabled: false
+
+redis:
+  master:
+    persistence:
+      enabled: false

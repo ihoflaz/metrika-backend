@@ -517,4 +517,237 @@ export class DocumentService {
       },
     };
   }
+
+  /**
+   * Link a document to a task
+   * Creates a many-to-many relationship via DocumentTask junction table
+   */
+  async linkDocumentToTask(documentId: string, taskId: string, linkedBy: string) {
+    // Verify document exists
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, projectId: true },
+    });
+
+    if (!document) {
+      throw notFoundError('DOCUMENT_NOT_FOUND', 'Document not found');
+    }
+
+    // Verify task exists and belongs to same project
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, projectId: true },
+    });
+
+    if (!task) {
+      throw notFoundError('TASK_NOT_FOUND', 'Task not found');
+    }
+
+    if (task.projectId !== document.projectId) {
+      throw badRequestError(
+        'PROJECT_MISMATCH',
+        'Task and document must belong to the same project',
+        `Document is in project ${document.projectId}, but task is in project ${task.projectId}`,
+      );
+    }
+
+    // Check if link already exists
+    const existing = await this.prisma.documentTask.findUnique({
+      where: {
+        documentId_taskId: {
+          documentId,
+          taskId,
+        },
+      },
+    });
+
+    if (existing) {
+      throw badRequestError(
+        'LINK_ALREADY_EXISTS',
+        'Document is already linked to this task',
+        `Link created at ${existing.linkedAt.toISOString()}`,
+      );
+    }
+
+    // Create the link
+    const link = await this.prisma.documentTask.create({
+      data: {
+        id: uuidv7(),
+        documentId,
+        taskId,
+        linkedBy,
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            title: true,
+            docType: true,
+          },
+        },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    this.logger.info(
+      { documentId, taskId, linkedBy, linkId: link.id },
+      'Document linked to task',
+    );
+
+    return link;
+  }
+
+  /**
+   * Unlink a document from a task
+   * Removes the DocumentTask junction record
+   */
+  async unlinkDocumentFromTask(documentId: string, taskId: string) {
+    const link = await this.prisma.documentTask.findUnique({
+      where: {
+        documentId_taskId: {
+          documentId,
+          taskId,
+        },
+      },
+    });
+
+    if (!link) {
+      throw notFoundError(
+        'LINK_NOT_FOUND',
+        'Document is not linked to this task',
+      );
+    }
+
+    await this.prisma.documentTask.delete({
+      where: {
+        documentId_taskId: {
+          documentId,
+          taskId,
+        },
+      },
+    });
+
+    this.logger.info(
+      { documentId, taskId, linkId: link.id },
+      'Document unlinked from task',
+    );
+
+    return { success: true, linkId: link.id };
+  }
+
+  /**
+   * Get all documents linked to a specific task
+   * Returns documents with their current version info
+   */
+  async getDocumentsForTask(taskId: string) {
+    // Verify task exists
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true },
+    });
+
+    if (!task) {
+      throw notFoundError('TASK_NOT_FOUND', 'Task not found');
+    }
+
+    const links = await this.prisma.documentTask.findMany({
+      where: { taskId },
+      include: {
+        document: {
+          include: {
+            currentVersion: {
+              select: {
+                id: true,
+                versionNo: true,
+                status: true,
+                sizeBytes: true,
+                mimeType: true,
+              },
+            },
+            owner: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            project: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+        linker: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { linkedAt: 'desc' },
+    });
+
+    return links;
+  }
+
+  /**
+   * Get all tasks linked to a specific document
+   * Returns tasks with their basic info
+   */
+  async getTasksForDocument(documentId: string) {
+    // Verify document exists
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true },
+    });
+
+    if (!document) {
+      throw notFoundError('DOCUMENT_NOT_FOUND', 'Document not found');
+    }
+
+    const links = await this.prisma.documentTask.findMany({
+      where: { documentId },
+      include: {
+        task: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            project: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+        linker: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { linkedAt: 'desc' },
+    });
+
+    return links;
+  }
 }
+

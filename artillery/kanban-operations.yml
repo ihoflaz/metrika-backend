@@ -1,0 +1,235 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Warm-up: Light traffic
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm-up"
+    
+    # Normal load: Typical user behavior
+    - duration: 180  # 3 minutes
+      arrivalRate: 30
+      name: "Normal load - 30 users"
+    
+    # Peak load: Heavy drag-and-drop activity
+    - duration: 120  # 2 minutes
+      arrivalRate: 100
+      name: "Peak load - 100 users"
+    
+    # Cool-down
+    - duration: 30
+      arrivalRate: 5
+      name: "Cool-down"
+
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+
+  ensure:
+    # Kanban operations should be fast
+    p95: 1500  # 95th percentile < 1.5 seconds
+    p99: 2500  # 99th percentile < 2.5 seconds
+    maxErrorRate: 0.5  # < 0.5% error rate (stricter for UX)
+
+  http:
+    timeout: 10
+
+  variables:
+    apiBaseUrl: "http://localhost:3000/api/v1"
+
+  processor: "./kanban-operations-processor.js"
+
+scenarios:
+  # Scenario 1: Get Kanban Board (most frequent)
+  - name: "Get Kanban Board View"
+    weight: 40
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get board (grouped by status)
+      - get:
+          url: "/api/v1/tasks/kanban/board?projectId=1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: "board"
+
+  # Scenario 2: Drag Task to Another Column (very frequent)
+  - name: "Drag Task Between Columns"
+    weight: 30
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get board to get task IDs
+      - get:
+          url: "/api/v1/tasks/kanban/board?projectId=1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.board.PLANNED[0].id"
+              as: "taskId"
+          expect:
+            - statusCode: 200
+
+      # Move task to IN_PROGRESS column (drag-and-drop)
+      - post:
+          url: "/api/v1/tasks/kanban/move"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskId: "{{ taskId }}"
+            newStatus: "IN_PROGRESS"
+            position: 0
+          expect:
+            - statusCode: 200
+            - hasProperty: "task"
+
+  # Scenario 3: Reorder Task Within Same Column (frequent)
+  - name: "Reorder Task Within Column"
+    weight: 20
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get board
+      - get:
+          url: "/api/v1/tasks/kanban/board?projectId=1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.board.IN_PROGRESS[0].id"
+              as: "taskId"
+          expect:
+            - statusCode: 200
+
+      # Reorder within same column
+      - post:
+          url: "/api/v1/tasks/kanban/reorder"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskId: "{{ taskId }}"
+            status: "IN_PROGRESS"
+            newPosition: 2
+          expect:
+            - statusCode: 200
+            - hasProperty: "task"
+
+  # Scenario 4: Get Gantt Timeline (less frequent)
+  - name: "Get Gantt Chart Timeline"
+    weight: 5
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get Gantt view
+      - get:
+          url: "/api/v1/tasks/kanban/gantt?projectId=1&startDate=2025-01-01&endDate=2025-12-31"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: "tasks"
+
+  # Scenario 5: Multiple Sequential Drags (realistic user workflow)
+  - name: "User Workflow - Multiple Drag Operations"
+    weight: 5
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Get board
+      - get:
+          url: "/api/v1/tasks/kanban/board?projectId=1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.board.PLANNED[0].id"
+              as: "taskId1"
+            - json: "$.board.PLANNED[1].id"
+              as: "taskId2"
+          expect:
+            - statusCode: 200
+
+      # Drag task 1 to IN_PROGRESS
+      - post:
+          url: "/api/v1/tasks/kanban/move"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskId: "{{ taskId1 }}"
+            newStatus: "IN_PROGRESS"
+          expect:
+            - statusCode: 200
+
+      # Wait a bit (realistic user behavior)
+      - think: 2
+
+      # Drag task 2 to IN_PROGRESS
+      - post:
+          url: "/api/v1/tasks/kanban/move"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            taskId: "{{ taskId2 }}"
+            newStatus: "IN_PROGRESS"
+          expect:
+            - statusCode: 200
+
+      # Refresh board view
+      - get:
+          url: "/api/v1/tasks/kanban/board?projectId=1"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200

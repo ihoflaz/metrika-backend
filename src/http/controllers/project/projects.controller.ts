@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { ProjectStatus } from '@prisma/client';
 import type { ProjectService } from '../../../modules/projects/project.service';
+import { ProjectClosurePDFService } from '../../../modules/projects/project-closure-pdf.service';
 import { validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 
@@ -80,9 +81,11 @@ const serializeProject = (project: Awaited<ReturnType<ProjectService['createProj
 
 export class ProjectsController {
   private readonly projectService: ProjectService;
+  private readonly pdfService: ProjectClosurePDFService;
 
   constructor(projectService: ProjectService) {
     this.projectService = projectService;
+    this.pdfService = new ProjectClosurePDFService();
   }
 
   create = async (req: Request, res: Response) => {
@@ -98,11 +101,30 @@ export class ProjectsController {
     });
   };
 
-  list = async (_req: Request, res: Response) => {
-    const projects = await this.projectService.listProjects();
+  list = async (req: Request, res: Response) => {
+    const filters = {
+      status: req.query.status as string | string[] | undefined,
+      sponsorId: req.query.sponsorId as string | undefined,
+      pmoOwnerId: req.query.pmoOwnerId as string | undefined,
+      search: req.query.search as string | undefined,
+      startDateFrom: req.query.startDateFrom as string | undefined,
+      startDateTo: req.query.startDateTo as string | undefined,
+      endDateFrom: req.query.endDateFrom as string | undefined,
+      endDateTo: req.query.endDateTo as string | undefined,
+      page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+      sortBy: req.query.sortBy as string | undefined,
+      sortOrder: req.query.sortOrder as 'asc' | 'desc' | undefined,
+    };
+
+    const result = await this.projectService.listProjects(filters);
+    
     res.status(200).json({
-      data: projects.map((project) => serializeProject(project)),
-      meta: { requestId: getRequestId(res) },
+      data: result.data.map((project) => serializeProject(project)),
+      meta: {
+        requestId: getRequestId(res),
+        pagination: result.meta,
+      },
     });
   };
 
@@ -133,5 +155,22 @@ export class ProjectsController {
       data: serializeProject(project),
       meta: { requestId: getRequestId(res) },
     });
+  };
+
+  /**
+   * Generate project closure PDF report
+   * Gathers project statistics and generates a professional PDF
+   */
+  generateClosureReport = async (req: Request, res: Response) => {
+    const stats = await this.projectService.getProjectClosureStats(req.params.projectId);
+    const pdfStream = this.pdfService.generateClosureReport(stats);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="project-closure-${stats.project.code}.pdf"`
+    );
+
+    pdfStream.pipe(res);
   };
 }

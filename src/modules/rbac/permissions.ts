@@ -11,6 +11,7 @@ export const PERMISSIONS = {
   KPI_READ: 'kpi:read',
   KPI_WRITE: 'kpi:write',
   KPI_CREATE: 'kpi:create',
+  REPORT_READ: 'report:read',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -37,6 +38,7 @@ export const ROLE_PERMISSION_MAP: Record<RoleCode, PermissionCode[]> = {
     PERMISSIONS.KPI_READ,
     PERMISSIONS.KPI_WRITE,
     PERMISSIONS.KPI_CREATE,
+    PERMISSIONS.REPORT_READ,
   ],
   [ROLES.PROJECT_MANAGER]: [
     PERMISSIONS.PROJECT_READ,
@@ -48,6 +50,7 @@ export const ROLE_PERMISSION_MAP: Record<RoleCode, PermissionCode[]> = {
     PERMISSIONS.KPI_READ,
     PERMISSIONS.KPI_WRITE,
     PERMISSIONS.KPI_CREATE,
+    PERMISSIONS.REPORT_READ,
   ],
   [ROLES.TEAM_MEMBER]: [
     PERMISSIONS.PROJECT_READ,

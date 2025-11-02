@@ -1,0 +1,204 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    # Warm-up
+    - duration: 30
+      arrivalRate: 2
+      name: "Warm-up"
+    
+    # Moderate load: Typical export usage
+    - duration: 120  # 2 minutes
+      arrivalRate: 10
+      name: "Moderate load - 10 exports/sec"
+    
+    # Heavy load: Multiple simultaneous exports
+    - duration: 60
+      arrivalRate: 20
+      name: "Heavy load - 20 exports/sec"
+    
+    # Cool-down
+    - duration: 30
+      arrivalRate: 2
+      name: "Cool-down"
+
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+
+  ensure:
+    # Export generation is CPU-intensive, allow more time
+    p95: 3000  # 95th percentile < 3 seconds
+    p99: 5000  # 99th percentile < 5 seconds
+    maxErrorRate: 1  # < 1% error rate
+
+  http:
+    timeout: 30  # Exports may take longer
+
+  variables:
+    apiBaseUrl: "http://localhost:3000/api/v1"
+
+scenarios:
+  # Scenario 1: Excel Export - Small Dataset (< 100 tasks)
+  - name: "Excel Export - Small Dataset"
+    weight: 40
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Export tasks to Excel
+      - post:
+          url: "/api/v1/export/tasks/excel"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            filters:
+              projectId: 1
+              status: ["PLANNED", "IN_PROGRESS"]
+            options:
+              includeSubtasks: true
+              includeComments: false
+              groupBy: "status"
+          expect:
+            - statusCode: 200
+            - contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+  # Scenario 2: Excel Export - Large Dataset (500+ tasks)
+  - name: "Excel Export - Large Dataset"
+    weight: 20
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Export all tasks (no filters)
+      - post:
+          url: "/api/v1/export/tasks/excel"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            options:
+              includeSubtasks: true
+              includeComments: true
+              groupBy: "project"
+          expect:
+            - statusCode: 200
+            - contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+  # Scenario 3: PDF Export - Small Dataset
+  - name: "PDF Export - Small Dataset"
+    weight: 25
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Export tasks to PDF
+      - post:
+          url: "/api/v1/export/tasks/pdf"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            filters:
+              projectId: 1
+              priority: ["HIGH", "CRITICAL"]
+            options:
+              layout: "portrait"
+              fontSize: 10
+              includeCharts: true
+          expect:
+            - statusCode: 200
+            - contentType: "application/pdf"
+
+  # Scenario 4: PDF Export - Large Dataset (stress test)
+  - name: "PDF Export - Large Dataset with Charts"
+    weight: 10
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Export all tasks with charts (heavy operation)
+      - post:
+          url: "/api/v1/export/tasks/pdf"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            options:
+              layout: "landscape"
+              fontSize: 12
+              includeCharts: true
+              includeSummary: true
+          expect:
+            - statusCode: 200
+            - contentType: "application/pdf"
+
+  # Scenario 5: Concurrent Exports (stress test)
+  - name: "Multiple Concurrent Exports"
+    weight: 5
+    flow:
+      # Login
+      - post:
+          url: "/api/v1/auth/login"
+          json:
+            email: "pm1@metrika.com"
+            password: "Password123!"
+          capture:
+            - json: "$.accessToken"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Export Excel
+      - post:
+          url: "/api/v1/export/tasks/excel"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            filters:
+              projectId: 1
+          expect:
+            - statusCode: 200
+
+      # Export PDF (parallel - if artillery supports)
+      - post:
+          url: "/api/v1/export/tasks/pdf"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            filters:
+              projectId: 1
+          expect:
+            - statusCode: 200

@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "metrika-backend.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "metrika-backend.labels" . | nindent 4 }}
+data:
+  APP_HOST: {{ .Values.config.appHost | quote }}
+  APP_PORT: {{ .Values.config.appPort | quote }}
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  AUTH_ACCESS_TOKEN_TTL: {{ .Values.config.auth.accessTokenTTL | quote }}
+  AUTH_REFRESH_TOKEN_TTL: {{ .Values.config.auth.refreshTokenTTL | quote }}
+  PASSWORD_MIN_LENGTH: {{ .Values.config.password.minLength | quote }}
+  SMTP_PORT: {{ .Values.config.smtp.port | quote }}
+  SMTP_SECURE: {{ .Values.config.smtp.secure | quote }}
+  SMTP_FROM: {{ .Values.config.smtp.from | quote }}
+  STORAGE_REGION: {{ .Values.config.storage.region | quote }}
+  STORAGE_BUCKET: {{ .Values.config.storage.bucket | quote }}
+  CLAMAV_HOST: {{ .Values.config.clamav.host | quote }}
+  CLAMAV_PORT: {{ .Values.config.clamav.port | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "metrika-backend.fullname" . }}-secret
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "metrika-backend.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  DATABASE_URL: {{ .Values.secrets.databaseUrl | quote }}
+  AUTH_ACCESS_TOKEN_SECRET: {{ .Values.secrets.authAccessTokenSecret | quote }}
+  AUTH_REFRESH_TOKEN_SECRET: {{ .Values.secrets.authRefreshTokenSecret | quote }}
+  SMTP_HOST: {{ .Values.secrets.smtp.host | quote }}
+  SMTP_USERNAME: {{ .Values.secrets.smtp.username | quote }}
+  SMTP_PASSWORD: {{ .Values.secrets.smtp.password | quote }}
+  MAILHOG_BASE_URL: {{ .Values.secrets.mailhogBaseUrl | quote }}
+  STORAGE_ENDPOINT: {{ .Values.secrets.storage.endpoint | quote }}
+  STORAGE_ACCESS_KEY: {{ .Values.secrets.storage.accessKey | quote }}
+  STORAGE_SECRET_KEY: {{ .Values.secrets.storage.secretKey | quote }}

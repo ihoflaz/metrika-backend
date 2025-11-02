@@ -50,5 +50,24 @@ export const createDocumentRouter = (controller: DocumentsController): Router =>
     controller.approveVersion,
   );
 
+  // Document-Task Linking
+  router.post(
+    '/:documentId/link-task',
+    requirePermissions(PERMISSIONS.DOCUMENT_WRITE),
+    controller.linkToTask,
+  );
+
+  router.delete(
+    '/:documentId/unlink-task/:taskId',
+    requirePermissions(PERMISSIONS.DOCUMENT_WRITE),
+    controller.unlinkFromTask,
+  );
+
+  router.get(
+    '/:documentId/tasks',
+    requirePermissions(PERMISSIONS.DOCUMENT_READ),
+    controller.getLinkedTasks,
+  );
+
   return router;
 };
