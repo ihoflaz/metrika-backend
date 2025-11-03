@@ -271,4 +271,67 @@ export class TasksController {
       meta: { requestId: getRequestId(res) },
     });
   };
+
+  /**
+   * Full-text search tasks
+   * GET /api/v1/tasks/search?q=query&limit=20&projectId=uuid&status=IN_PROGRESS
+   */
+  static searchTasks = (taskService: TaskService) => async (req: Request, res: Response) => {
+    const { q: query, limit, projectId, status } = req.query;
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return validationError('INVALID_SEARCH_QUERY', 'Search query is required');
+    }
+
+    const parsedLimit = limit ? parseInt(limit as string, 10) : 20;
+    if (Number.isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      return validationError('INVALID_LIMIT', 'Limit must be between 1 and 100');
+    }
+
+    const options: { limit: number; projectId?: string; status?: TaskStatus } = {
+      limit: parsedLimit,
+    };
+
+    if (projectId && typeof projectId === 'string') {
+      options.projectId = projectId;
+    }
+
+    if (status && typeof status === 'string') {
+      if (!Object.values(TaskStatus).includes(status as TaskStatus)) {
+        return validationError('INVALID_STATUS', 'Invalid task status');
+      }
+      options.status = status as TaskStatus;
+    }
+
+    const results = await taskService.searchTasks(query.trim(), options);
+
+    res.json({
+      data: results.map((task) => ({
+        type: 'task',
+        id: task.id,
+        attributes: {
+          code: task.code,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          projectId: task.projectId,
+          progressPct: task.progressPct,
+          plannedStart: task.plannedStart?.toISOString() || null,
+          plannedEnd: task.plannedEnd?.toISOString() || null,
+          createdAt: task.createdAt.toISOString(),
+          updatedAt: task.updatedAt.toISOString(),
+          rank: task.rank,
+          owner: task.owner,
+          project: task.project,
+        },
+      })),
+      meta: {
+        requestId: getRequestId(res),
+        query: query.trim(),
+        total: results.length,
+        limit: parsedLimit,
+      },
+    });
+  };
 }

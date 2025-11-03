@@ -1,0 +1,176 @@
+<meta name="subject" content="🚨 Görev Gecikti: {{taskTitle}}" />
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #374151;
+      background-color: #F3F4F6;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+      color: #FFFFFF;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .critical-box {
+      background-color: #FEE2E2;
+      border-left: 4px solid #DC2626;
+      padding: 20px;
+      margin: 16px 0;
+      border-radius: 4px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .info-item {
+      background-color: #F9FAFB;
+      padding: 16px;
+      border-radius: 6px;
+    }
+    .info-item strong {
+      color: #6B7280;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-item span {
+      color: #374151;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .overdue-badge {
+      background-color: #DC2626;
+      color: #FFFFFF;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+      margin: 16px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #DC2626;
+      color: #FFFFFF !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 16px 0;
+      font-size: 16px;
+    }
+    .footer {
+      background-color: #F9FAFB;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #6B7280;
+      border-top: 1px solid #E5E7EB;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚨 Görev Gecikti</h1>
+      <p>Acil Müdahale Gerekiyor</p>
+    </div>
+    <div class="content">
+      <div class="critical-box">
+        <h2 style="color: #991B1B; margin: 0 0 12px; font-size: 18px;">⚠️ Kritik Durum</h2>
+        <p style="margin: 0; color: #7F1D1D; font-size: 15px; line-height: 1.5;">
+          <strong>{{ownerName}}</strong>, sorumlusu olduğunuz görev planlanan bitiş tarihini geçmiştir.
+          Bu görev <span class="overdue-badge">{{daysOverdue}} gün gecikmiş</span> durumda.
+        </p>
+      </div>
+
+      <h3 style="color: #1F2937; margin: 28px 0 16px;">Görev Bilgileri</h3>
+      
+      <div class="info-grid">
+        <div class="info-item">
+          <strong>Görev Kodu</strong>
+          <span>{{taskCode}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Proje</strong>
+          <span>{{projectName}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Görev Başlığı</strong>
+          <span style="grid-column: 1 / -1;">{{taskTitle}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Planlanan Bitiş</strong>
+          <span>{{formatDate plannedEnd}}</span>
+        </div>
+        <div class="info-item">
+          <strong>Gecikme Süresi</strong>
+          <span style="color: #DC2626;">{{daysOverdue}} gün</span>
+        </div>
+      </div>
+
+      <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; margin: 24px 0; border-radius: 4px;">
+        <h4 style="margin: 0 0 8px; color: #92400E; font-size: 14px;">📋 Yapılması Gerekenler</h4>
+        <ul style="margin: 8px 0; padding-left: 20px; color: #78350F;">
+          <li>Görev durumunu güncelleyin</li>
+          <li>Gecikme nedenini belirtin</li>
+          <li>Yeni tahmini tamamlanma tarihi ekleyin</li>
+          <li>Gerekirse proje sponsoru ile görüşün</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{{appUrl}}/projects/{{projectId}}/tasks/{{taskId}}" class="button">
+          Görevi Hemen Görüntüle →
+        </a>
+      </div>
+
+      {{#if (gte daysOverdue 7)}}
+      <div class="critical-box" style="background-color: #FEE2E2; border-color: #7F1D1D;">
+        <strong style="color: #7F1D1D; font-size: 15px;">🔔 PMO Bildirimi</strong>
+        <p style="margin: 8px 0 0; color: #991B1B;">
+          7 günden fazla gecikme nedeniyle bu görev PMO yönetimi ve proje sponsoruna bildirilmiştir.
+          Lütfen en kısa sürede aksiyon alın.
+        </p>
+      </div>
+      {{/if}}
+
+      <p style="font-size: 13px; color: #6B7280; margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E7EB;">
+        Bu otomatik bildirimdir. Görev durumunuz güncel ise lütfen sistem üzerindeki bilgileri kontrol edin.
+      </p>
+    </div>
+    <div class="footer">
+      <p>Bu e-posta <strong>Metrika PMO</strong> otomatik izleme sistemi tarafından gönderilmiştir.</p>
+      <p style="margin-top: 8px; color: #9CA3AF;">© 2025 Metrika PMO. Tüm hakları saklıdır.</p>
+    </div>
+  </div>
+</body>
+</html>

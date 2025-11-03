@@ -1,0 +1,332 @@
+/**
+ * KPI Dashboard PDF Template
+ */
+export function kpiDashboardTemplate(data: {
+  totalKPIs: number;
+  activeKPIs: number;
+  performingKPIs: number;
+  breachedKPIs: number;
+  performanceRate: number;
+  kpis: Array<{
+    code: string;
+    name: string;
+    category: string;
+    status: string;
+    currentValue: number;
+    targetValue: number;
+    threshold: number;
+    deviation: number;
+    trend: 'up' | 'down' | 'stable';
+  }>;
+  generatedAt: string;
+  generatedBy: string;
+}): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>KPI Dashboard Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #333;
+      background: #fff;
+      padding: 30px;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #366092;
+    }
+    
+    .header h1 {
+      color: #366092;
+      font-size: 28pt;
+      margin-bottom: 10px;
+    }
+    
+    .header .subtitle {
+      color: #666;
+      font-size: 12pt;
+    }
+    
+    .metadata {
+      text-align: right;
+      font-size: 9pt;
+      color: #666;
+      margin-bottom: 20px;
+    }
+    
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .card.green {
+      background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+    }
+    
+    .card.blue {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .card.red {
+      background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    }
+    
+    .card.orange {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+    
+    .card-title {
+      font-size: 10pt;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+    
+    .card-value {
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    .card-subtitle {
+      font-size: 9pt;
+      opacity: 0.8;
+    }
+    
+    .section {
+      margin-bottom: 30px;
+    }
+    
+    .section-title {
+      font-size: 16pt;
+      color: #366092;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+      margin-bottom: 20px;
+    }
+    
+    thead {
+      background-color: #366092;
+      color: white;
+    }
+    
+    th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    tbody tr:hover {
+      background-color: #f5f5f5;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 9pt;
+      font-weight: 600;
+    }
+    
+    .status.active {
+      background-color: #e3f2fd;
+      color: #1976d2;
+    }
+    
+    .status.monitoring {
+      background-color: #e8f5e9;
+      color: #388e3c;
+    }
+    
+    .status.breached {
+      background-color: #ffebee;
+      color: #d32f2f;
+    }
+    
+    .status.proposed {
+      background-color: #fff3e0;
+      color: #f57c00;
+    }
+    
+    .deviation {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 9pt;
+    }
+    
+    .deviation.positive {
+      background-color: #e8f5e9;
+      color: #388e3c;
+    }
+    
+    .deviation.negative {
+      background-color: #ffebee;
+      color: #d32f2f;
+    }
+    
+    .deviation.neutral {
+      background-color: #f5f5f5;
+      color: #666;
+    }
+    
+    .trend {
+      font-size: 14pt;
+    }
+    
+    .trend.up {
+      color: #4caf50;
+    }
+    
+    .trend.down {
+      color: #f44336;
+    }
+    
+    .trend.stable {
+      color: #ff9800;
+    }
+    
+    .category-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 9pt;
+      background-color: #e0e0e0;
+      color: #333;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e0e0e0;
+      text-align: center;
+      font-size: 9pt;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 KPI Dashboard Report</h1>
+    <div class="subtitle">Key Performance Indicators Overview</div>
+  </div>
+  
+  <div class="metadata">
+    <div>Generated: ${data.generatedAt}</div>
+    <div>Generated by: ${data.generatedBy}</div>
+  </div>
+  
+  <div class="summary-cards">
+    <div class="card blue">
+      <div class="card-title">Total KPIs</div>
+      <div class="card-value">${data.totalKPIs}</div>
+      <div class="card-subtitle">Monitored</div>
+    </div>
+    
+    <div class="card green">
+      <div class="card-title">Active KPIs</div>
+      <div class="card-value">${data.activeKPIs}</div>
+      <div class="card-subtitle">In monitoring</div>
+    </div>
+    
+    <div class="card orange">
+      <div class="card-title">Performing Well</div>
+      <div class="card-value">${data.performingKPIs}</div>
+      <div class="card-subtitle">${data.performanceRate.toFixed(0)}% success rate</div>
+    </div>
+    
+    <div class="card red">
+      <div class="card-title">Breached</div>
+      <div class="card-value">${data.breachedKPIs}</div>
+      <div class="card-subtitle">Needs attention</div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2 class="section-title">📈 KPI Details</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>KPI Name</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th>Current</th>
+          <th>Target</th>
+          <th>Deviation</th>
+          <th>Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.kpis
+          .map(
+            (kpi) => `
+          <tr>
+            <td><strong>${kpi.code}</strong></td>
+            <td>${kpi.name}</td>
+            <td><span class="category-badge">${kpi.category}</span></td>
+            <td><span class="status ${kpi.status.toLowerCase()}">${kpi.status}</span></td>
+            <td>${kpi.currentValue.toFixed(2)}</td>
+            <td>${kpi.targetValue.toFixed(2)}</td>
+            <td>
+              <span class="deviation ${kpi.deviation > 0 ? 'positive' : kpi.deviation < 0 ? 'negative' : 'neutral'}">
+                ${kpi.deviation > 0 ? '+' : ''}${kpi.deviation.toFixed(1)}%
+              </span>
+            </td>
+            <td>
+              <span class="trend ${kpi.trend}">
+                ${kpi.trend === 'up' ? '↗' : kpi.trend === 'down' ? '↘' : '→'}
+              </span>
+            </td>
+          </tr>
+        `
+          )
+          .join('')}
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="footer">
+    <p>This report is confidential and intended for internal use only.</p>
+    <p>© 2025 Metrika PMO System. All rights reserved.</p>
+  </div>
+</body>
+</html>
+  `;
+}

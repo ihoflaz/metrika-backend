@@ -340,4 +340,91 @@ export class ProjectService {
       throw notFoundError('PROJECT_NOT_FOUND', 'Project not found');
     }
   }
+
+  /**
+   * Full-text search projects with PostgreSQL ts_query
+   * @param query Search query string
+   * @param options Search options (limit, status filter)
+   * @returns Array of projects with relevance ranking
+   */
+  async searchProjects(
+    query: string,
+    options?: { limit?: number; status?: ProjectStatus }
+  ) {
+    const limit = options?.limit || 20;
+
+    // Convert search query to tsquery format
+    const tsQuery = query
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .join(' & ');
+
+    // Build SQL query with full-text search ranking
+    let sql = `
+      SELECT 
+        p."id",
+        p."code",
+        p."name",
+        p."description",
+        p."status",
+        p."startDate",
+        p."endDate",
+        p."actualStart",
+        p."actualEnd",
+        p."budgetPlanned",
+        p."createdAt",
+        p."updatedAt",
+        ts_rank(p."searchVector", to_tsquery('english', $1)) as rank,
+        jsonb_build_object(
+          'id', s."id",
+          'fullName', s."fullName",
+          'email', s."email"
+        ) as sponsor,
+        jsonb_build_object(
+          'id', pm."id",
+          'fullName', pm."fullName",
+          'email', pm."email"
+        ) as pmo_owner
+      FROM "Project" p
+      INNER JOIN "User" s ON p."sponsorId" = s."id"
+      LEFT JOIN "User" pm ON p."pmoOwnerId" = pm."id"
+      WHERE p."searchVector" @@ to_tsquery('english', $1)
+    `;
+
+    const params: Array<string> = [tsQuery];
+
+    if (options?.status) {
+      sql += ` AND p."status" = $2`;
+      params.push(options.status);
+    }
+
+    sql += ` ORDER BY rank DESC, p."updatedAt" DESC LIMIT ${limit}`;
+
+    const results = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        status: ProjectStatus;
+        startDate: Date;
+        endDate: Date | null;
+        actualStart: Date | null;
+        actualEnd: Date | null;
+        budgetPlanned: unknown | null; // Decimal type
+        createdAt: Date;
+        updatedAt: Date;
+        rank: number;
+        sponsor: { id: string; fullName: string; email: string };
+        pmo_owner: { id: string; fullName: string; email: string } | null;
+      }>
+    >(sql, ...params);
+
+    // Transform budgetPlanned from Decimal to number
+    return results.map((p) => ({
+      ...p,
+      budgetPlanned: p.budgetPlanned ? Number(p.budgetPlanned) : null,
+    }));
+  }
 }

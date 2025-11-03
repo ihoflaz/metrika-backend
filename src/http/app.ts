@@ -12,6 +12,8 @@ import type { Logger } from '../lib/logger';
 import { createHealthRouter } from './routes/health.routes';
 import { createErrorHandler } from './middleware/error-handler';
 import { getRequestId, requestContextMiddleware } from './middleware/request-context';
+import { initializeBullBoard } from '../lib/bull-board/bull-board.adapter';
+import { bullBoardBasicAuth } from '../lib/bull-board/bull-board-auth.middleware';
 
 export interface CreateAppOptions {
   logger: Logger;
@@ -30,10 +32,13 @@ export interface CreateAppOptions {
   reportsRouter: Router;
   auditRouter: Router;
   queueRouter: Router;
-  kanbanRouter: Router;
   exportRouter: Router;
   monitoringRouter: Router;
   unsubscribeRouter: Router;
+  searchRouter: Router;
+  newApiKeysRouter: Router;
+  systemSettingsRouter: Router;
+  userPreferencesRouter: Router;
   authMiddleware: RequestHandler;
 }
 
@@ -54,10 +59,13 @@ export const createApp = ({
   reportsRouter,
   auditRouter,
   queueRouter,
-  kanbanRouter,
   exportRouter,
   monitoringRouter,
   unsubscribeRouter,
+  searchRouter,
+  newApiKeysRouter,
+  systemSettingsRouter,
+  userPreferencesRouter,
   authMiddleware,
 }: CreateAppOptions) => {
   const app = express();
@@ -102,6 +110,16 @@ export const createApp = ({
 
   app.use('/', createHealthRouter());
   app.use('/api/v1/unsubscribe', unsubscribeRouter); // Public route - no auth
+  
+  // Bull Board UI - Admin queue monitoring
+  try {
+    const bullBoardAdapter = initializeBullBoard();
+    app.use('/admin/queues', bullBoardBasicAuth, bullBoardAdapter.getRouter());
+    logger.info('📊 Bull Board mounted at /admin/queues');
+  } catch (error) {
+    logger.error({ error }, '❌ Failed to mount Bull Board');
+  }
+  
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', authMiddleware, userRouter);
   app.use('/api/v1/projects', authMiddleware, projectRouter);
@@ -115,9 +133,14 @@ export const createApp = ({
   app.use('/api/v1/reports', authMiddleware, reportsRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/queues', authMiddleware, queueRouter);
-  app.use('/api/v1/projects/:projectId/kanban', authMiddleware, kanbanRouter);
   app.use('/api/v1/export', authMiddleware, exportRouter);
+  app.use('/api/v1/search', authMiddleware, searchRouter);
   app.use('/api/v1/monitoring/queues', authMiddleware, monitoringRouter);
+  
+  // Week 4 Day 19-20: API Keys & Settings
+  app.use('/api/v1/api-keys', authMiddleware, newApiKeysRouter);
+  app.use('/api/v1/settings', systemSettingsRouter); // Has public endpoints
+  app.use('/api/v1/user/preferences', authMiddleware, userPreferencesRouter);
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({

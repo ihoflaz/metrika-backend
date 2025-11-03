@@ -28,6 +28,8 @@ build/
 
 # Documentation (as requested)
 docs/
+*.md
+*.txt
 
 # Logs
 logs/

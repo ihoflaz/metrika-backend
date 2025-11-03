@@ -421,6 +421,56 @@ export class DocumentsController {
     });
   };
 
+  /**
+   * Full-text search documents
+   * GET /api/v1/documents/search?q=query&limit=20&projectId=uuid
+   */
+  static searchDocuments = (documentService: DocumentService) => async (req: Request, res: Response) => {
+    const authUser = res.locals.authUser as AuthenticatedRequestUser;
+    const { q: query, limit, projectId } = req.query;
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return validationError('INVALID_SEARCH_QUERY', 'Search query is required');
+    }
+
+    const parsedLimit = limit ? parseInt(limit as string, 10) : 20;
+    if (Number.isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      return validationError('INVALID_LIMIT', 'Limit must be between 1 and 100');
+    }
+
+    const options: { limit: number; projectId?: string } = { limit: parsedLimit };
+    if (projectId && typeof projectId === 'string') {
+      options.projectId = projectId;
+    }
+
+    const results = await documentService.searchDocuments(query.trim(), options);
+
+    res.json({
+      data: results.map((doc) => ({
+        type: 'document',
+        id: doc.id,
+        attributes: {
+          title: doc.title,
+          docType: doc.docType,
+          classification: doc.classification,
+          projectId: doc.projectId,
+          tags: doc.tags,
+          createdAt: doc.createdAt.toISOString(),
+          updatedAt: doc.updatedAt.toISOString(),
+          rank: doc.rank,
+          owner: doc.owner,
+          project: doc.project,
+        },
+      })),
+      meta: {
+        requestId: getRequestId(res),
+        query: query.trim(),
+        total: results.length,
+        limit: parsedLimit,
+      },
+    });
+  };
+
   private static mapFilePayload(file: Express.Multer.File): UploadFilePayload {
     return {
       buffer: file.buffer,

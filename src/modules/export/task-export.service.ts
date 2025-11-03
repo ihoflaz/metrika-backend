@@ -302,10 +302,10 @@ export class TaskExportService {
    * Apply status-based conditional formatting
    */
   private applyStatusFormatting(worksheet: any, rowCount: number): void {
-    const statusColumn = worksheet.getColumn('status');
-    
+    // Status is the 3rd column (ID=1, Title=2, Status=3)
+    // Access cells directly instead of using getColumn
     for (let i = 2; i <= rowCount + 1; i++) {
-      const cell = statusColumn.getCell(i);
+      const cell = worksheet.getCell(`C${i}`); // C column for status
       const status = cell.value as string;
       
       if (status?.includes('Tamamlandı')) {

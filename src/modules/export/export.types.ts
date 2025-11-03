@@ -12,9 +12,11 @@ export enum ExportFormat {
 export enum ExportType {
   TASKS = 'tasks',
   TASKS_SUMMARY = 'tasks_summary',
+  TASK_METRICS = 'task_metrics',
   KPI_REPORT = 'kpi_report',
   KPI_DASHBOARD = 'kpi_dashboard',
   PROJECT_REPORT = 'project_report',
+  PORTFOLIO_SUMMARY = 'portfolio_summary',
   GANTT_CHART = 'gantt_chart',
   AUDIT_LOG = 'audit_log',
 }

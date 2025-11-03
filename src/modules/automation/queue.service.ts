@@ -64,16 +64,19 @@ export class QueueService {
    * Task Automation Queue'ya job ekle
    */
   async addTaskAutomationJob(data: {
-    taskId: string;
-    action: 'CHECK_DELAY' | 'AUTO_COMPLETE' | 'SEND_REMINDER';
+    taskId?: string;
+    action: 'CHECK_OVERDUE' | 'CHECK_DELAY' | 'AUTO_COMPLETE' | 'SEND_REMINDER' | 'AUTO_UPDATE_STATUS';
+    newStatus?: string;
     metadata?: Record<string, unknown>;
   }) {
     const queue = this.queues.get(QueueName.TASK_AUTOMATION);
     if (!queue) throw new Error('Task automation queue not found');
 
-    const job = await queue.add(data.action, data, {
-      jobId: `task-${data.taskId}-${data.action}-${Date.now()}`,
-    });
+    const jobId = data.taskId 
+      ? `task-${data.taskId}-${data.action}-${Date.now()}`
+      : `task-batch-${data.action}-${Date.now()}`;
+
+    const job = await queue.add(data.action, data, { jobId });
 
     logger.debug({ jobId: job.id, taskId: data.taskId, action: data.action }, '📝 Task automation job added');
     return job;
@@ -83,19 +86,21 @@ export class QueueService {
    * KPI Automation Queue'ya job ekle
    */
   async addKpiAutomationJob(data: {
-    kpiId: string;
-    projectId: string;
-    action: 'CHECK_BREACH' | 'CALCULATE_SCORE' | 'TRIGGER_ACTION';
+    kpiId?: string;
+    projectId?: string;
+    action: 'CALCULATE_ALL' | 'CALCULATE_PROJECT_HEALTH' | 'CHECK_KPI_BREACH' | 'CHECK_BREACH' | 'CALCULATE_SCORE' | 'TRIGGER_ACTION';
     metadata?: Record<string, unknown>;
   }) {
     const queue = this.queues.get(QueueName.KPI_AUTOMATION);
     if (!queue) throw new Error('KPI automation queue not found');
 
-    const job = await queue.add(data.action, data, {
-      jobId: `kpi-${data.kpiId}-${data.action}-${Date.now()}`,
-    });
+    const jobId = data.kpiId || data.projectId
+      ? `kpi-${data.kpiId || data.projectId}-${data.action}-${Date.now()}`
+      : `kpi-batch-${data.action}-${Date.now()}`;
 
-    logger.debug({ jobId: job.id, kpiId: data.kpiId, action: data.action }, '📊 KPI automation job added');
+    const job = await queue.add(data.action, data, { jobId });
+
+    logger.debug({ jobId: job.id, kpiId: data.kpiId, projectId: data.projectId, action: data.action }, '📊 KPI automation job added');
     return job;
   }
 
@@ -103,18 +108,21 @@ export class QueueService {
    * Document Automation Queue'ya job ekle
    */
   async addDocumentAutomationJob(data: {
-    documentId: string;
-    action: 'APPROVAL_REMINDER' | 'VERSION_CLEANUP' | 'VIRUS_SCAN';
+    documentId?: string;
+    versionId?: string;
+    action: 'PROCESS_PENDING_APPROVALS' | 'SEND_APPROVAL_REMINDER' | 'APPROVAL_REMINDER' | 'VERSION_CLEANUP' | 'VIRUS_SCAN';
     metadata?: Record<string, unknown>;
   }) {
     const queue = this.queues.get(QueueName.DOCUMENT_AUTOMATION);
     if (!queue) throw new Error('Document automation queue not found');
 
-    const job = await queue.add(data.action, data, {
-      jobId: `doc-${data.documentId}-${data.action}-${Date.now()}`,
-    });
+    const jobId = data.documentId || data.versionId
+      ? `doc-${data.documentId || data.versionId}-${data.action}-${Date.now()}`
+      : `doc-batch-${data.action}-${Date.now()}`;
 
-    logger.debug({ jobId: job.id, documentId: data.documentId, action: data.action }, '📄 Document automation job added');
+    const job = await queue.add(data.action, data, { jobId });
+
+    logger.debug({ jobId: job.id, documentId: data.documentId, versionId: data.versionId, action: data.action }, '📄 Document automation job added');
     return job;
   }
 
@@ -123,20 +131,24 @@ export class QueueService {
    */
   async addNotificationJob(data: {
     userId?: string; // Optional - direct email kullanılabilir
-    to?: string[]; // Direct email addresses
+    to?: string | string[]; // Direct email addresses
     cc?: string[];
     bcc?: string[];
-    type: 'EMAIL' | 'IN_APP';
-    template: string;
-    payload: Record<string, unknown>;
+    action?: 'SEND_EMAIL' | 'SEND_TEMPLATE_EMAIL' | 'SEND_BULK_EMAILS';
+    type?: 'EMAIL' | 'IN_APP';
+    template?: string;
+    data?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
     priority?: number;
   }) {
     const queue = this.queues.get(QueueName.NOTIFICATION);
     if (!queue) throw new Error('Notification queue not found');
 
-    const job = await queue.add(data.type, data, {
+    const jobType = data.action || data.type || 'SEND_TEMPLATE_EMAIL';
+
+    const job = await queue.add(jobType, data, {
       priority: data.priority || 5, // 1-10 arası (1 = en yüksek)
-      jobId: `notif-${data.userId || 'multi'}-${data.type}-${Date.now()}`,
+      jobId: `notif-${data.userId || 'multi'}-${jobType}-${Date.now()}`,
     });
 
     logger.debug({ 

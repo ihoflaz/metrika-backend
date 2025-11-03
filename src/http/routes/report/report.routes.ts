@@ -24,5 +24,39 @@ export function createReportsRouter(reportsController: ReportsController): Route
     reportsController.getTaskMetrics,
   );
 
+  // ===== EXCEL EXPORT ENDPOINTS =====
+
+  router.get(
+    '/portfolio-summary/export',
+    requirePermissions(PERMISSIONS.REPORT_READ, PERMISSIONS.PROJECT_READ),
+    reportsController.exportPortfolioSummary,
+  );
+
+  router.get(
+    '/kpi-dashboard/export',
+    requirePermissions(PERMISSIONS.REPORT_READ, PERMISSIONS.KPI_READ),
+    reportsController.exportKPIDashboard,
+  );
+
+  router.get(
+    '/task-metrics/export',
+    requirePermissions(PERMISSIONS.REPORT_READ, PERMISSIONS.TASK_READ),
+    reportsController.exportTaskMetrics,
+  );
+
+  // ===== PDF EXPORT ENDPOINTS =====
+
+  router.get(
+    '/portfolio-summary/export/pdf',
+    requirePermissions(PERMISSIONS.REPORT_READ, PERMISSIONS.PROJECT_READ),
+    reportsController.exportPortfolioSummaryPDF,
+  );
+
+  router.get(
+    '/kpi-dashboard/export/pdf',
+    requirePermissions(PERMISSIONS.REPORT_READ, PERMISSIONS.KPI_READ),
+    reportsController.exportKPIDashboardPDF,
+  );
+
   return router;
 }

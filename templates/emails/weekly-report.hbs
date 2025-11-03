@@ -1,0 +1,300 @@
+<meta name="subject" content="📈 Haftalık Rapor - {{weekStart}} / {{weekEnd}}" />
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #374151;
+      background-color: #F3F4F6;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 700px;
+      margin: 20px auto;
+      background-color: #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+      color: #FFFFFF;
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .content {
+      padding: 32px 24px;
+    }
+    .summary-box {
+      background: linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%);
+      padding: 24px;
+      border-radius: 12px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .summary-stat {
+      display: inline-block;
+      margin: 0 24px;
+    }
+    .summary-stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: #6D28D9;
+      display: block;
+    }
+    .summary-stat-label {
+      font-size: 13px;
+      color: #6D28D9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .chart-section {
+      margin: 32px 0;
+    }
+    .section-title {
+      color: #1F2937;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #8B5CF6;
+    }
+    .progress-bar-container {
+      background-color: #F3F4F6;
+      height: 40px;
+      border-radius: 20px;
+      overflow: hidden;
+      margin: 16px 0;
+      position: relative;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #10B981 0%, #059669 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .milestone-item {
+      background-color: #F9FAFB;
+      padding: 20px;
+      margin: 16px 0;
+      border-radius: 8px;
+      border-left: 5px solid #8B5CF6;
+    }
+    .milestone-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .milestone-title {
+      font-weight: 700;
+      color: #1F2937;
+      font-size: 18px;
+    }
+    .achievement-badge {
+      background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+      color: #FFFFFF;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 2px 4px rgba(251, 191, 36, 0.3);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .stat-card {
+      background-color: #F9FAFB;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-card-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1F2937;
+    }
+    .stat-card-label {
+      font-size: 13px;
+      color: #6B7280;
+      margin-top: 4px;
+    }
+    .team-highlight {
+      background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #8B5CF6;
+      color: #FFFFFF !important;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 16px 0;
+    }
+    .footer {
+      background-color: #F9FAFB;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #6B7280;
+      border-top: 1px solid #E5E7EB;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📈 Haftalık Rapor</h1>
+      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 16px;">
+        {{formatDate weekStart}} - {{formatDate weekEnd}}
+      </p>
+    </div>
+    <div class="content">
+      <div style="background-color: #EDE9FE; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
+        <p style="margin: 0; color: #6D28D9; font-size: 16px; text-align: center; font-weight: 600;">
+          🎯 Bu hafta harika bir performans sergilendi! İşte öne çıkanlar...
+        </p>
+      </div>
+
+      <div class="summary-box">
+        <div class="summary-stat">
+          <span class="summary-stat-value">{{weeklyProgress}}%</span>
+          <span class="summary-stat-label">Haftalık İlerleme</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-stat-value">{{completedTasks}}</span>
+          <span class="summary-stat-label">Tamamlanan Görev</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-stat-value">{{activeUsers}}</span>
+          <span class="summary-stat-label">Aktif Kullanıcı</span>
+        </div>
+      </div>
+
+      <div class="chart-section">
+        <h2 class="section-title">📊 Proje Tamamlanma Durumu</h2>
+        {{#each projects}}
+        <div style="margin: 20px 0;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <strong style="color: #1F2937;">{{this.name}}</strong>
+            <span style="color: #6B7280; font-size: 14px;">{{this.completionRate}}%</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" style="width: {{this.completionRate}}%;">
+              {{this.completionRate}}% Tamamlandı
+            </div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+
+      {{#if milestones}}
+      <div class="chart-section">
+        <h2 class="section-title">🎯 Tamamlanan Kilometre Taşları</h2>
+        {{#each milestones}}
+        <div class="milestone-item">
+          <div class="milestone-header">
+            <span class="milestone-title">{{this.title}}</span>
+            <span class="achievement-badge">✨ Tamamlandı</span>
+          </div>
+          <p style="margin: 8px 0; color: #6B7280;">
+            <strong>Proje:</strong> {{this.projectName}}
+          </p>
+          <p style="margin: 8px 0; color: #6B7280; font-size: 14px;">
+            {{this.description}}
+          </p>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <div class="chart-section">
+        <h2 class="section-title">📈 Haftalık İstatistikler</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-value" style="color: #10B981;">+{{newTasks}}</div>
+            <div class="stat-card-label">Yeni Görev</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-value" style="color: #3B82F6;">{{avgCompletionTime}}h</div>
+            <div class="stat-card-label">Ort. Tamamlama Süresi</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-value" style="color: #8B5CF6;">{{meetingHours}}h</div>
+            <div class="stat-card-label">Toplantı Saati</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-value" style="color: #EF4444;">{{blockedTasks}}</div>
+            <div class="stat-card-label">Engellenen Görev</div>
+          </div>
+        </div>
+      </div>
+
+      {{#if topContributors}}
+      <div class="team-highlight">
+        <h3 style="margin: 0 0 16px; color: #065F46; font-size: 18px;">⭐ Haftalık Yıldızlar</h3>
+        {{#each topContributors}}
+        <div style="display: flex; justify-content: space-between; padding: 12px; background-color: #FFFFFF; margin: 8px 0; border-radius: 6px;">
+          <div>
+            <strong style="color: #1F2937; font-size: 16px;">{{this.name}}</strong>
+            <div style="font-size: 13px; color: #6B7280; margin-top: 2px;">{{this.role}}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="color: #10B981; font-weight: 600;">{{this.completedTasks}} görev</div>
+            <div style="font-size: 12px; color: #6B7280;">{{this.productivityScore}}% verimlilik</div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      {{#if nextWeekGoals}}
+      <div style="background-color: #FEF3C7; padding: 20px; border-radius: 8px; margin: 24px 0;">
+        <h3 style="margin: 0 0 12px; color: #92400E; font-size: 18px;">🎯 Gelecek Hafta Hedefleri</h3>
+        <ul style="margin: 0; padding-left: 24px; color: #78350F;">
+          {{#each nextWeekGoals}}
+          <li style="margin: 8px 0;">{{this}}</li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{{appUrl}}/reports/weekly/{{weekNumber}}" class="button">
+          Detaylı Raporu Görüntüle →
+        </a>
+      </div>
+
+      <p style="font-size: 13px; color: #6B7280; margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E7EB;">
+        Bu haftalık rapor her Pazartesi sabahı saat 09:00'da otomatik olarak gönderilir.
+      </p>
+    </div>
+    <div class="footer">
+      <p>Bu e-posta <strong>Metrika PMO</strong> tarafından otomatik olarak gönderilmiştir.</p>
+      <p style="margin-top: 8px; color: #9CA3AF;">© 2025 Metrika PMO. Tüm hakları saklıdır.</p>
+    </div>
+  </div>
+</body>
+</html>

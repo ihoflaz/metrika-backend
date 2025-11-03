@@ -2,10 +2,10 @@ import { Router } from 'express';
 import type { TasksController } from '../../controllers/task/tasks.controller';
 import type { TaskCommentsController } from '../../controllers/task/task-comments.controller';
 import type { TaskWatchersController } from '../../controllers/task/task-watchers.controller';
+import type { KanbanController } from '../../controllers/project/kanban.controller';
 import { requirePermissions } from '../../middleware/auth/authentication';
 import { PERMISSIONS } from '../../../modules/rbac/permissions';
 import * as bulkOpsController from '../../controllers/task/bulk-operations.controller';
-import * as kanbanController from '../../controllers/project/kanban.controller';
 
 export const createProjectTaskRouter = (controller: TasksController): Router => {
   const router = Router({ mergeParams: true });
@@ -21,8 +21,12 @@ export const createTaskRouter = (
   controller: TasksController,
   commentsController: TaskCommentsController,
   watchersController: TaskWatchersController,
+  kanbanController: KanbanController
 ): Router => {
   const router = Router();
+
+  // Search endpoint (must be before parameterized routes)
+  router.get('/search', requirePermissions(PERMISSIONS.TASK_READ), controller.searchTasks);
 
   // Bulk operations routes (must be before parameterized routes)
   router.post('/bulk/update', requirePermissions(PERMISSIONS.TASK_WRITE), bulkOpsController.bulkUpdateTasks);

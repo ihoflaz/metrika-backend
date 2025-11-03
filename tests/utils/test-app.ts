@@ -20,6 +20,7 @@ export interface TestAppContext {
 
 const ensureEnvDefaults = () => {
   process.env.NODE_ENV = 'test';
+  process.env.DATABASE_URL ??= 'postgresql://metrika:metrika_pass@localhost:5432/metrika?schema=public';
   process.env.APP_HOST ??= '127.0.0.1';
   process.env.APP_PORT ??= '0';
   process.env.LOG_LEVEL ??= 'silent';
@@ -51,8 +52,8 @@ const buildTestDatabaseUrl = (baseUrl: string, schema: string) => {
 };
 
 export const setupTestApp = async (): Promise<TestAppContext> => {
-  ensureEnvDefaults();
   initializeEnv();
+  ensureEnvDefaults();
 
   const baseUrl = process.env.DATABASE_URL;
   if (!baseUrl) {
@@ -65,7 +66,7 @@ export const setupTestApp = async (): Promise<TestAppContext> => {
   process.env.DATABASE_URL = databaseUrl;
 
   execSync('npx prisma migrate deploy --schema prisma/schema.prisma', {
-    stdio: 'ignore',
+    stdio: 'inherit',
     env: { ...process.env, DATABASE_URL: databaseUrl },
   });
 
@@ -73,7 +74,7 @@ export const setupTestApp = async (): Promise<TestAppContext> => {
   const config = loadAppConfig();
   await seedCoreRbac(prisma, config.PASSWORD_MIN_LENGTH);
 
-  const container = buildContainer();
+  const container = buildContainer(prisma); // Inject test prisma client
   const app = container.resolve('app');
   const httpClient = request(app);
 

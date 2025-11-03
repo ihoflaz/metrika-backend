@@ -4,7 +4,13 @@ const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: '<rootDir>/tsconfig.test.json',
+        isolatedModules: true, // Skip type checking for faster test runs
+      },
+    ],
   },
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],

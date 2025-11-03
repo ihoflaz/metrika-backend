@@ -1,8 +1,8 @@
 import { PrismaClient, TaskStatus, TaskPriority } from '@prisma/client';
 import { createLogger } from '../../lib/logger';
+import { prisma } from '../../db/prisma-client';
 
 const logger = createLogger({ name: 'KanbanService' });
-const prisma = new PrismaClient();
 
 export interface KanbanTask {
   id: string;
@@ -48,6 +48,12 @@ export interface GanttTask {
 }
 
 export class KanbanService {
+  private readonly prisma: PrismaClient;
+
+  constructor(prismaClient?: PrismaClient) {
+    this.prisma = prismaClient || prisma;
+  }
+
   /**
    * Status sırası (Kanban kolonları için)
    */
@@ -78,7 +84,7 @@ export class KanbanService {
    * Proje için Kanban board'u getir
    */
   async getKanbanBoard(projectId: string): Promise<KanbanBoard> {
-    const project = await prisma.project.findUnique({
+    const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { name: true },
     });
@@ -88,7 +94,7 @@ export class KanbanService {
     }
 
     // Tüm task'leri getir
-    const tasks = await prisma.task.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: { projectId },
       select: {
         id: true,
@@ -156,7 +162,7 @@ export class KanbanService {
     newStatus: TaskStatus,
     position?: number
   ): Promise<void> {
-    const task = await prisma.task.findUnique({
+    const task = await this.prisma.task.findUnique({
       where: { id: taskId },
       select: { status: true, projectId: true },
     });
@@ -176,7 +182,7 @@ export class KanbanService {
     }
 
     // Farklı status'e taşıma
-    await prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       // 1. Eski status'ten kaldır (pozisyonları düzelt)
       const oldStatusTasks = await tx.task.findMany({
         where: {
@@ -239,7 +245,7 @@ export class KanbanService {
     taskId: string,
     newPosition: number
   ): Promise<void> {
-    await prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const tasks = await tx.task.findMany({
         where: { projectId, status },
         orderBy: { kanbanPosition: 'asc' },
@@ -280,7 +286,7 @@ export class KanbanService {
     status: TaskStatus,
     taskOrder: string[]
   ): Promise<void> {
-    await prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       for (let i = 0; i < taskOrder.length; i++) {
         await tx.task.update({
           where: { id: taskOrder[i] },
@@ -299,7 +305,7 @@ export class KanbanService {
    * Gantt chart için veri getir
    */
   async getGanttData(projectId: string): Promise<GanttTask[]> {
-    const tasks = await prisma.task.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: { projectId },
       select: {
         id: true,
@@ -350,3 +356,4 @@ export class KanbanService {
 }
 
 export const kanbanService = new KanbanService();
+

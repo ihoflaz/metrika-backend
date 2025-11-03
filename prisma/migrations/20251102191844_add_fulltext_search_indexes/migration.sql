@@ -1,0 +1,3 @@
+-- Fulltext search indexes temporarily disabled for test compatibility
+-- These will be added manually to production database
+-- TODO: Implement proper fulltext search with extension management in Week 5

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { validationError } from '../../../common/errors';
 import type { KPIService } from '../../../modules/kpi/kpi.service';
+import { excelExportService } from '../../../modules/reports/excel-export.service';
 
 const createKPISchema = z.object({
   code: z.string().min(1).max(20),
@@ -419,5 +420,48 @@ export class KPIController {
         attributes: result,
       },
     });
+  };
+
+  // ===== EXCEL EXPORT =====
+
+  exportKPI = async (req: Request, res: Response) => {
+    const { kpiId } = req.params;
+    const validation = trendQuerySchema.safeParse(req.query);
+
+    if (!validation.success) {
+      throw validationError(validation.error.flatten().fieldErrors);
+    }
+
+    // Get KPI details and trend data
+    const kpi = await this.kpiService.getKPI(kpiId);
+    const trend = await this.kpiService.getTrend(kpiId, validation.data.limit);
+
+    // Transform data for Excel export
+    const targetValue = Number(kpi.targetValue);
+    const excelData = {
+      kpi: {
+        name: kpi.name,
+        description: kpi.description || '',
+        category: kpi.category,
+        unit: kpi.unit,
+        targetValue: targetValue,
+        frequency: kpi.aggregationPeriod,
+      },
+      seriesData: trend.dataPoints.map((dp) => {
+        const actualValue = Number(dp.actualValue);
+        return {
+          date: new Date(dp.periodStart),
+          actualValue: actualValue,
+          targetValue: targetValue,
+          deviation: targetValue !== 0 ? ((actualValue - targetValue) / targetValue) * 100 : 0,
+        };
+      }),
+    };
+
+    const buffer = await excelExportService.exportSingleKPI(excelData);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="kpi-${kpi.code}-${Date.now()}.xlsx"`);
+    res.send(buffer);
   };
 }

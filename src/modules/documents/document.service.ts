@@ -749,5 +749,103 @@ export class DocumentService {
 
     return links;
   }
+
+  /**
+   * Full-text search documents with PostgreSQL ts_query
+   * @param query Search query string
+   * @param options Search options (limit, projectId filter)
+   * @returns Array of documents with relevance ranking
+   */
+  async searchDocuments(
+    query: string,
+    options?: { limit?: number; projectId?: string }
+  ): Promise<
+    Array<{
+      id: string;
+      title: string;
+      docType: DocumentType;
+      classification: DocumentClassification;
+      projectId: string;
+      tags: string[];
+      createdAt: Date;
+      updatedAt: Date;
+      rank: number;
+      owner: {
+        id: string;
+        fullName: string;
+        email: string;
+      };
+      project: {
+        id: string;
+        code: string;
+        name: string;
+      };
+    }>
+  > {
+    const limit = options?.limit || 20;
+
+    // Convert search query to tsquery format (replace spaces with &)
+    const tsQuery = query
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .join(' & ');
+
+    // Build SQL query with full-text search ranking
+    const sql = `
+      SELECT 
+        d."id",
+        d."title",
+        d."docType",
+        d."classification",
+        d."projectId",
+        d."tags",
+        d."createdAt",
+        d."updatedAt",
+        ts_rank(d."searchVector", to_tsquery('english', $1)) as rank,
+        jsonb_build_object(
+          'id', u."id",
+          'fullName', u."fullName",
+          'email', u."email"
+        ) as owner,
+        jsonb_build_object(
+          'id', p."id",
+          'code', p."code",
+          'name', p."name"
+        ) as project
+      FROM "Document" d
+      INNER JOIN "User" u ON d."ownerId" = u."id"
+      INNER JOIN "Project" p ON d."projectId" = p."id"
+      WHERE d."searchVector" @@ to_tsquery('english', $1)
+        ${options?.projectId ? 'AND d."projectId" = $2' : ''}
+      ORDER BY rank DESC, d."updatedAt" DESC
+      LIMIT ${limit}
+    `;
+
+    const params = options?.projectId ? [tsQuery, options.projectId] : [tsQuery];
+
+    const results = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        title: string;
+        docType: DocumentType;
+        classification: DocumentClassification;
+        projectId: string;
+        tags: string[];
+        createdAt: Date;
+        updatedAt: Date;
+        rank: number;
+        owner: { id: string; fullName: string; email: string };
+        project: { id: string; code: string; name: string };
+      }>
+    >(sql, ...params);
+
+    this.logger.info(
+      { query, resultsCount: results.length, limit },
+      '[DocumentService] Full-text search completed'
+    );
+
+    return results;
+  }
 }
 

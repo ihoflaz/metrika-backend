@@ -144,11 +144,11 @@ describe('Kanban API E2E Tests', () => {
   // TEST 1: Kanban Board Getir
   it('should return kanban board with tasks grouped by status', async () => {
     const response = await httpClient
-      .get(`/api/v1/projects/${projectId}/kanban`).set('Authorization', `Bearer ${authToken}`)
+      .get(`/api/v1/projects/${projectId}/kanban`)
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
 
-    const board: KanbanBoard = response.body.data;
+    const board: KanbanBoard = response.body;
 
     expect(board.projectId).toBe(projectId);
     expect(board.columns).toHaveLength(7); // 7 status kolonu
@@ -171,23 +171,21 @@ describe('Kanban API E2E Tests', () => {
   // TEST 2: Task'ı Farklı Kolona Taşı
   it('should move task to different status column', async () => {
     const response = await httpClient
-      .put(`/api/v1/projects/${projectId}/kanban/move`).set('Authorization', `Bearer ${authToken}`)
+      .patch(`/api/v1/tasks/${taskIds[0]}/move`)
+      .set('Authorization', `Bearer ${authToken}`)
       .send({
-        taskId: taskIds[0], // Task 1 (DRAFT)
-        targetStatus: 'PLANNED',
-        targetPosition: 0,
+        status: 'PLANNED',
+        position: 0,
       })
       .expect(200);
 
-    const updatedTask = response.body.data;
-    expect(updatedTask.status).toBe('PLANNED');
-    expect(updatedTask.kanbanPosition).toBe(0);
+    expect(response.body.message).toBe('Task moved successfully');
 
     // Verify board state
     const boardRes = await httpClient
       .get(`/api/v1/projects/${projectId}/kanban`)
       .set('Authorization', `Bearer ${authToken}`);
-    const board: KanbanBoard = boardRes.body.data;
+    const board: KanbanBoard = boardRes.body;
     const plannedColumn = board.columns.find((c: any) => c.status === 'PLANNED');
     expect(plannedColumn!.count).toBe(2); // Task 1 + Task 2
   });
@@ -197,16 +195,15 @@ describe('Kanban API E2E Tests', () => {
     // IN_PROGRESS kolonunda 2 task var: Task 3 (pos=0), Task 4 (pos=1)
     // Task 4'ü position 0'a taşı (Task 3'ün üstüne)
     const response = await httpClient
-      .put(`/api/v1/projects/${projectId}/kanban/move`).set('Authorization', `Bearer ${authToken}`)
+      .patch(`/api/v1/tasks/${taskIds[3]}/move`)
+      .set('Authorization', `Bearer ${authToken}`)
       .send({
-        taskId: taskIds[3], // Task 4
-        targetStatus: 'IN_PROGRESS',
-        targetPosition: 0,
+        status: 'IN_PROGRESS',
+        position: 0,
       })
       .expect(200);
 
-    const updatedTask = response.body.data;
-    expect(updatedTask.kanbanPosition).toBe(0);
+    expect(response.body.message).toBe('Task moved successfully');
 
     // Verify Task 3 shifted down
     const task3 = await prisma.task.findUnique({ where: { id: taskIds[2] } });
@@ -219,16 +216,16 @@ describe('Kanban API E2E Tests', () => {
     const boardRes1 = await httpClient
       .get(`/api/v1/projects/${projectId}/kanban`)
       .set('Authorization', `Bearer ${authToken}`);
-    const board: KanbanBoard = boardRes1.body.data;
+    const board: KanbanBoard = boardRes1.body;
     const inProgressColumn = board.columns.find((c: any) => c.status === 'IN_PROGRESS');
     const taskIdsInColumn = inProgressColumn!.tasks.map((t: any) => t.id).reverse();
 
     await httpClient
-      .put(`/api/v1/projects/${projectId}/kanban/reorder`)
+      .post(`/api/v1/projects/${projectId}/kanban/reorder`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({
         status: 'IN_PROGRESS',
-        taskIds: taskIdsInColumn,
+        taskOrder: taskIdsInColumn,
       })
       .expect(200);
 
@@ -236,63 +233,69 @@ describe('Kanban API E2E Tests', () => {
     const boardRes2 = await httpClient
       .get(`/api/v1/projects/${projectId}/kanban`)
       .set('Authorization', `Bearer ${authToken}`);
-    const updatedBoard: KanbanBoard = boardRes2.body.data;
+    const updatedBoard: KanbanBoard = boardRes2.body;
     const updatedColumn = updatedBoard.columns.find((c: any) => c.status === 'IN_PROGRESS');
     expect(updatedColumn!.tasks[0].id).toBe(taskIdsInColumn[0]);
     expect(updatedColumn!.tasks[1].id).toBe(taskIdsInColumn[1]);
   });
 
   // TEST 5: Gantt Chart Verisi Getir
-  it('should return gantt chart data with hierarchical structure', async () => {
-    // Parent-child task oluştur
-    const parentTask = await prisma.task.create({
+  it('should return gantt chart data with dependencies', async () => {
+    // Dependency ile task oluştur
+    const task6 = await prisma.task.create({
       data: {
         id: uuidv7(),
         projectId,
-        title: 'Parent Task',
-        status: 'IN_PROGRESS',
+        title: 'Task 6',
+        status: 'PLANNED',
         priority: 'HIGH',
         ownerId: userId,
         plannedStart: new Date('2025-01-01'),
-        plannedEnd: new Date('2025-12-31'),
-        progressPct: 50,
+        plannedEnd: new Date('2025-06-30'),
+        progressPct: 0,
       },
     });
 
-    const childTask = await prisma.task.create({
+    const task7 = await prisma.task.create({
       data: {
         id: uuidv7(),
         projectId,
-        parentTaskId: parentTask.id,
-        title: 'Child Task',
-        status: 'COMPLETED',
+        title: 'Task 7',
+        status: 'PLANNED',
         priority: 'NORMAL',
         ownerId: userId,
-        plannedStart: new Date('2025-01-01'),
-        plannedEnd: new Date('2025-06-30'),
-        actualEnd: new Date(),
-        progressPct: 100,
+        plannedStart: new Date('2025-07-01'),
+        plannedEnd: new Date('2025-12-31'),
+        progressPct: 0,
+      },
+    });
+
+    // Task 7 depends on Task 6
+    await prisma.taskDependency.create({
+      data: {
+        id: uuidv7(),
+        taskId: task7.id,
+        dependsOnTaskId: task6.id,
+        type: 'FS', // FINISH_TO_START
       },
     });
 
     const response = await httpClient
-      .get(`/api/v1/projects/${projectId}/kanban/gantt`)
+      .get(`/api/v1/projects/${projectId}/gantt`)
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
 
-    const ganttData = response.body.data;
+    const ganttData = response.body.tasks;
     expect(Array.isArray(ganttData)).toBe(true);
 
-    // Parent task'ı bul
-    const parentGantt = ganttData.find((t: any) => t.id === parentTask.id);
-    expect(parentGantt).toBeDefined();
-    expect(parentGantt.children).toBeDefined();
-    expect(parentGantt.children).toHaveLength(1);
-    expect(parentGantt.children[0].id).toBe(childTask.id);
+    // Task 7'yi bul ve dependency'yi kontrol et
+    const task7Gantt = ganttData.find((t: any) => t.id === task7.id);
+    expect(task7Gantt).toBeDefined();
+    expect(task7Gantt.dependencies).toContain(task6.id);
 
     // Cleanup
-    await prisma.task.deleteMany({ where: { parentTaskId: parentTask.id } });
-    await prisma.task.delete({ where: { id: parentTask.id } });
+    await prisma.taskDependency.deleteMany({ where: { taskId: task7.id } });
+    await prisma.task.deleteMany({ where: { id: { in: [task6.id, task7.id] } } });
   });
 });
 

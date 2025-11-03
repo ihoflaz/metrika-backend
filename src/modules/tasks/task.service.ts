@@ -309,4 +309,95 @@ export class TaskService {
       throw badRequestError('TASK_INVALID_USER', 'User not found');
     }
   }
+
+  /**
+   * Full-text search tasks with PostgreSQL ts_query
+   * @param query Search query string
+   * @param options Search options (limit, projectId, status filter)
+   * @returns Array of tasks with relevance ranking
+   */
+  async searchTasks(
+    query: string,
+    options?: { limit?: number; projectId?: string; status?: TaskStatus }
+  ) {
+    const limit = options?.limit || 20;
+
+    // Convert search query to tsquery format
+    const tsQuery = query
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .join(' & ');
+
+    // Build SQL query with full-text search ranking
+    let sql = `
+      SELECT 
+        t."id",
+        t."code",
+        t."title",
+        t."description",
+        t."status",
+        t."priority",
+        t."projectId",
+        t."progressPct",
+        t."plannedStart",
+        t."plannedEnd",
+        t."createdAt",
+        t."updatedAt",
+        ts_rank(t."searchVector", to_tsquery('english', $1)) as rank,
+        jsonb_build_object(
+          'id', o."id",
+          'fullName', o."fullName",
+          'email', o."email"
+        ) as owner,
+        jsonb_build_object(
+          'id', p."id",
+          'code', p."code",
+          'name', p."name"
+        ) as project
+      FROM "Task" t
+      INNER JOIN "User" o ON t."ownerId" = o."id"
+      INNER JOIN "Project" p ON t."projectId" = p."id"
+      WHERE t."searchVector" @@ to_tsquery('english', $1)
+    `;
+
+    const params: Array<string> = [tsQuery];
+    let paramIndex = 2;
+
+    if (options?.projectId) {
+      sql += ` AND t."projectId" = $${paramIndex}`;
+      params.push(options.projectId);
+      paramIndex++;
+    }
+
+    if (options?.status) {
+      sql += ` AND t."status" = $${paramIndex}`;
+      params.push(options.status);
+      paramIndex++;
+    }
+
+    sql += ` ORDER BY rank DESC, t."updatedAt" DESC LIMIT ${limit}`;
+
+    const results = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        code: string | null;
+        title: string;
+        description: string | null;
+        status: TaskStatus;
+        priority: TaskPriority;
+        projectId: string;
+        progressPct: number;
+        plannedStart: Date | null;
+        plannedEnd: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        rank: number;
+        owner: { id: string; fullName: string; email: string };
+        project: { id: string; code: string; name: string };
+      }>
+    >(sql, ...params);
+
+    return results;
+  }
 }

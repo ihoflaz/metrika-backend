@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { kanbanService } from '../../../modules/projects/kanban.service';
+import { KanbanService } from '../../../modules/projects/kanban.service';
 import { z } from 'zod';
 import { TaskStatus } from '@prisma/client';
 
@@ -13,88 +13,92 @@ const reorderTasksSchema = z.object({
   taskOrder: z.array(z.string().uuid()),
 });
 
-/**
- * GET /api/v1/projects/:projectId/kanban
- * Kanban board'u getir
- */
-export async function getKanbanBoard(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const { projectId } = req.params;
+export class KanbanController {
+  constructor(private kanbanService: KanbanService) {}
 
-    const board = await kanbanService.getKanbanBoard(projectId);
+  /**
+   * GET /api/v1/projects/:projectId/kanban
+   * Kanban board'u getir
+   */
+  getKanbanBoard = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { projectId } = req.params;
 
-    res.json(board);
-  } catch (error) {
-    next(error);
-  }
-}
+      const board = await this.kanbanService.getKanbanBoard(projectId);
 
-/**
- * PATCH /api/v1/tasks/:taskId/move
- * Task'ı yeni status'e taşı
- */
-export async function moveTask(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const { taskId } = req.params;
-    const validated = moveTaskSchema.parse(req.body);
+      res.json(board);
+    } catch (error) {
+      next(error);
+    }
+  };
 
-    await kanbanService.moveTask(taskId, validated.status, validated.position);
+  /**
+   * PATCH /api/v1/tasks/:taskId/move
+   * Task'ı yeni status'e taşı
+   */
+  moveTask = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { taskId } = req.params;
+      const validated = moveTaskSchema.parse(req.body);
 
-    res.json({ message: 'Task moved successfully' });
-  } catch (error) {
-    next(error);
-  }
-}
+      await this.kanbanService.moveTask(taskId, validated.status, validated.position);
 
-/**
- * POST /api/v1/projects/:projectId/kanban/reorder
- * Task'leri toplu yeniden sırala
- */
-export async function reorderTasks(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const { projectId } = req.params;
-    const validated = reorderTasksSchema.parse(req.body);
+      res.json({ message: 'Task moved successfully' });
+    } catch (error) {
+      next(error);
+    }
+  };
 
-    await kanbanService.reorderTasks(
-      projectId,
-      validated.status,
-      validated.taskOrder
-    );
+  /**
+   * POST /api/v1/projects/:projectId/kanban/reorder
+   * Task'leri toplu yeniden sırala
+   */
+  reorderTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { projectId } = req.params;
+      const validated = reorderTasksSchema.parse(req.body);
 
-    res.json({ message: 'Tasks reordered successfully' });
-  } catch (error) {
-    next(error);
-  }
-}
+      await this.kanbanService.reorderTasks(
+        projectId,
+        validated.status,
+        validated.taskOrder
+      );
 
-/**
- * GET /api/v1/projects/:projectId/gantt
- * Gantt chart verisi getir
- */
-export async function getGanttData(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  try {
-    const { projectId } = req.params;
+      res.json({ message: 'Tasks reordered successfully' });
+    } catch (error) {
+      next(error);
+    }
+  };
 
-    const tasks = await kanbanService.getGanttData(projectId);
+  /**
+   * GET /api/v1/projects/:projectId/gantt
+   * Gantt chart verisi getir
+   */
+  getGanttData = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { projectId } = req.params;
 
-    res.json({ tasks });
-  } catch (error) {
-    next(error);
-  }
+      const tasks = await this.kanbanService.getGanttData(projectId);
+
+      res.json({ tasks });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

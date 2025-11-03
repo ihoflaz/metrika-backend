@@ -27,6 +27,9 @@ export const createProjectDocumentRouter = (controller: DocumentsController): Ro
 export const createDocumentRouter = (controller: DocumentsController): Router => {
   const router = Router();
 
+  // Search endpoint should come before /:documentId to avoid route conflict
+  router.get('/search', requirePermissions(PERMISSIONS.DOCUMENT_READ), controller.searchDocuments);
+
   router.get('/', requirePermissions(PERMISSIONS.DOCUMENT_READ), controller.list);
 
   router.get('/:documentId', requirePermissions(PERMISSIONS.DOCUMENT_READ), controller.getById);
