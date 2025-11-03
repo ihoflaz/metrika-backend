@@ -26,11 +26,6 @@ build/
 *~
 .DS_Store
 
-# Documentation (as requested)
-docs/
-*.md
-*.txt
-
 # Logs
 logs/
 *.log
