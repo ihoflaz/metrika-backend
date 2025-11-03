@@ -151,7 +151,10 @@ export class TasksController {
   constructor(taskService: TaskService, documentService: DocumentService) {
     this.taskService = taskService;
     this.documentService = documentService;
+    this.searchTasks = TasksController.searchTasks(taskService);
   }
+
+  public searchTasks: ReturnType<typeof TasksController.searchTasks>;
 
   create = async (req: Request, res: Response) => {
     const parsed = createTaskSchema.safeParse(req.body);

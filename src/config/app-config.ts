@@ -8,12 +8,16 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   AUTH_ACCESS_TOKEN_SECRET: z.string().min(16, 'access token secret too short'),
   AUTH_REFRESH_TOKEN_SECRET: z.string().min(32, 'refresh token secret too short'),
+  AUTH_ACCESS_TOKEN_SECRET_FALLBACKS: z.string().optional(),
+  AUTH_REFRESH_TOKEN_SECRET_FALLBACKS: z.string().optional(),
   AUTH_ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900),
   AUTH_REFRESH_TOKEN_TTL: z.coerce
     .number()
     .int()
     .positive()
     .default(60 * 60 * 24 * 14),
+  AUTH_TOKEN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  AUTH_TOKEN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   PASSWORD_MIN_LENGTH: z.coerce.number().int().min(8).default(12),
   SMTP_HOST: z.string().trim().min(1),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),

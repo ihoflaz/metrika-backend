@@ -110,7 +110,10 @@ export class DocumentsController {
 
   constructor(documentService: DocumentService) {
     this.documentService = documentService;
+    this.searchDocuments = DocumentsController.searchDocuments(documentService);
   }
+
+  public searchDocuments: ReturnType<typeof DocumentsController.searchDocuments>;
 
   create = async (req: Request, res: Response) => {
     const parsed = createDocumentSchema.safeParse(req.body);

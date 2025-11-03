@@ -21,7 +21,10 @@ export type AuditEventCode =
   | 'AUTH_LOGIN_FAILED'
   | 'AUTH_LOGIN_BLOCKED'
   | 'AUTH_REFRESH_SUCCESS'
-  | 'AUTH_REFRESH_FAILED';
+  | 'AUTH_REFRESH_FAILED'
+  | 'AUTH_LOGOUT'
+  | 'AUTH_PASSWORD_CHANGE_SUCCESS'
+  | 'AUTH_PASSWORD_CHANGE_FAILED';
 
 export type ExportFormat = 'json' | 'csv';
 

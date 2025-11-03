@@ -2,7 +2,15 @@
 -- Add ts_vector columns and GIN indexes to documents, tasks, and projects tables
 
 -- Enable PostgreSQL pg_trgm extension for trigram similarity matching
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+DO $$ BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'pg_trgm extension could not be created due to insufficient privileges.';
+  END;
+END$$;
+
 
 -- Enable PostgreSQL full-text search extension (if not already enabled)
 -- This is usually enabled by default in PostgreSQL
@@ -112,16 +120,49 @@ CREATE INDEX IF NOT EXISTS "Project_search_vector_idx" ON "Project" USING GIN (s
 -- =============================================
 
 -- Document search performance indexes
-CREATE INDEX IF NOT EXISTS "Document_title_trgm_idx" ON "Document" USING GIN (title gin_trgm_ops);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    BEGIN
+      EXECUTE 'CREATE INDEX IF NOT EXISTS "Document_title_trgm_idx" ON "Document" USING GIN (title gin_trgm_ops)';
+    EXCEPTION
+      WHEN undefined_object THEN
+        RAISE NOTICE 'Skipping Document_title_trgm_idx because gin_trgm_ops is not available.';
+    END;
+  ELSE
+    RAISE NOTICE 'Skipping Document_title_trgm_idx because pg_trgm is not available.';
+  END IF;
+END$$;
 CREATE INDEX IF NOT EXISTS "Document_tags_idx" ON "Document" USING GIN (tags);
 
 -- Task search performance indexes  
-CREATE INDEX IF NOT EXISTS "Task_title_trgm_idx" ON "Task" USING GIN (title gin_trgm_ops);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    BEGIN
+      EXECUTE 'CREATE INDEX IF NOT EXISTS "Task_title_trgm_idx" ON "Task" USING GIN (title gin_trgm_ops)';
+    EXCEPTION
+      WHEN undefined_object THEN
+        RAISE NOTICE 'Skipping Task_title_trgm_idx because gin_trgm_ops is not available.';
+    END;
+  ELSE
+    RAISE NOTICE 'Skipping Task_title_trgm_idx because pg_trgm is not available.';
+  END IF;
+END$$;
 CREATE INDEX IF NOT EXISTS "Task_code_idx" ON "Task" (code) WHERE code IS NOT NULL;
 
 -- Project search performance indexes
-CREATE INDEX IF NOT EXISTS "Project_name_trgm_idx" ON "Project" USING GIN (name gin_trgm_ops);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    BEGIN
+      EXECUTE 'CREATE INDEX IF NOT EXISTS "Project_name_trgm_idx" ON "Project" USING GIN (name gin_trgm_ops)';
+    EXCEPTION
+      WHEN undefined_object THEN
+        RAISE NOTICE 'Skipping Project_name_trgm_idx because gin_trgm_ops is not available.';
+    END;
+  ELSE
+    RAISE NOTICE 'Skipping Project_name_trgm_idx because pg_trgm is not available.';
+  END IF;
+END$$;
 CREATE INDEX IF NOT EXISTS "Project_code_idx" ON "Project" (code);
 
 -- Note: pg_trgm extension is required for trigram indexes
--- If not already enabled: CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- If it is not available, the trigram-based indexes above will be skipped.

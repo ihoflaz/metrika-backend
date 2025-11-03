@@ -1,7 +1,8 @@
 import { PrismaClient, UserStatus, Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 import { forbiddenError, unauthorizedError } from '../../common/errors';
-import { verifyPassword } from './password.service';
+import { hashPassword, verifyPassword } from './password.service';
+import { defaultPasswordPolicy, validatePassword } from './password-policy';
 import type { TokenService } from './token.service';
 import type { AuthenticatedUserDTO, LoginResponseDTO, AuthTokensDTO } from './dto/auth.dto';
 import type { AuditService } from '../audit/audit.service';
@@ -205,6 +206,124 @@ export class AuthService {
     return {
       tokens: issued.tokens,
       user: extractUserProfile(user),
+    };
+  }
+
+  async logout(refreshToken: string, context: RefreshContext): Promise<void> {
+    const verification = await this.tokenService.verifyRefreshToken(refreshToken);
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: verification.hash },
+    });
+
+    if (!storedToken || storedToken.revokedAt) {
+      throw unauthorizedError('Invalid refresh token');
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'logout',
+      },
+    });
+
+    await this.auditService.logAuthEvent('AUTH_LOGOUT', {
+      actorId: storedToken.userId,
+      context,
+    });
+  }
+
+  async changePassword(
+    refreshToken: string,
+    currentPassword: string,
+    newPassword: string,
+    context: RefreshContext,
+  ): Promise<LoginResponseDTO> {
+    const verification = await this.tokenService.verifyRefreshToken(refreshToken);
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: verification.hash },
+      include: {
+        user: {
+          include: {
+            roles: {
+              include: {
+                role: {
+                  include: {
+                    permissions: {
+                      include: {
+                        permission: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!storedToken || storedToken.revokedAt || !storedToken.user) {
+      throw unauthorizedError('Invalid refresh token');
+    }
+
+    const user = storedToken.user;
+
+    if (forbiddenStatuses.includes(user.status)) {
+      throw forbiddenError('AUTH_ACCOUNT_RESTRICTED', 'Account is not active');
+    }
+
+    const passwordValid = await verifyPassword(user.passwordHash, currentPassword);
+    if (!passwordValid) {
+      await this.auditService.logAuthEvent('AUTH_PASSWORD_CHANGE_FAILED', {
+        actorId: user.id,
+        context,
+        detail: 'Invalid current password',
+      });
+      throw unauthorizedError('Invalid credentials');
+    }
+
+    const minLength = Number.parseInt(process.env.PASSWORD_MIN_LENGTH ?? '12', 10);
+    const policy = defaultPasswordPolicy(Number.isNaN(minLength) ? 12 : minLength);
+    validatePassword(newPassword, policy);
+
+    const newHash = await hashPassword(newPassword);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: newHash,
+          passwordSetAt: new Date(),
+        },
+      });
+
+      await tx.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: {
+          revokedAt: new Date(),
+          revokedReason: 'password_changed',
+        },
+      });
+    });
+
+    const refreshedUser = await this.getUserWithRoles(user.email);
+    if (!refreshedUser) {
+      throw unauthorizedError('User not found');
+    }
+
+    const issued = await this.issueTokens(user.id, refreshedUser, context);
+
+    await this.auditService.logAuthEvent('AUTH_PASSWORD_CHANGE_SUCCESS', {
+      actorId: user.id,
+      context,
+    });
+
+    return {
+      tokens: issued.tokens,
+      user: extractUserProfile(refreshedUser),
     };
   }
 

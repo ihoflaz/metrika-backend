@@ -91,6 +91,79 @@ describe('Auth API', () => {
     expect(reuseStatus).toBe(401);
   });
 
+  it('revokes refresh token on logout', async () => {
+    const {
+      body: {
+        data: {
+          attributes: { refreshToken },
+        },
+      },
+    } = await context.httpClient.post('/api/v1/auth/login').send({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+
+    const logoutResponse = await context.httpClient.post('/api/v1/auth/logout').send({
+      refreshToken,
+    });
+
+    expect(logoutResponse.status).toBe(204);
+
+    const reuseResponse = await context.httpClient.post('/api/v1/auth/refresh').send({
+      refreshToken,
+    });
+
+    expect(reuseResponse.status).toBe(401);
+  });
+
+  it('changes password and invalidates existing sessions', async () => {
+    const initialLogin = await context.httpClient.post('/api/v1/auth/login').send({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+
+    expect(initialLogin.status).toBe(200);
+
+    const originalRefreshToken = initialLogin.body.data.attributes.refreshToken as string;
+    const newPassword = 'BetterPass123!';
+
+    const changeResponse = await context.httpClient.post('/api/v1/auth/change-password').send({
+      refreshToken: originalRefreshToken,
+      currentPassword: ADMIN_PASSWORD,
+      newPassword,
+    });
+
+    expect(changeResponse.status).toBe(200);
+
+    const reuseResponse = await context.httpClient.post('/api/v1/auth/refresh').send({
+      refreshToken: originalRefreshToken,
+    });
+
+    expect(reuseResponse.status).toBe(401);
+
+    const legacyLogin = await context.httpClient.post('/api/v1/auth/login').send({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+
+    expect(legacyLogin.status).toBe(401);
+
+    const newLogin = await context.httpClient.post('/api/v1/auth/login').send({
+      email: ADMIN_EMAIL,
+      password: newPassword,
+    });
+
+    expect(newLogin.status).toBe(200);
+
+    const revertResponse = await context.httpClient.post('/api/v1/auth/change-password').send({
+      refreshToken: newLogin.body.data.attributes.refreshToken,
+      currentPassword: newPassword,
+      newPassword: ADMIN_PASSWORD,
+    });
+
+    expect(revertResponse.status).toBe(200);
+  });
+
   it('allows access to protected route with required permission', async () => {
     const { body: loginBody } = await context.httpClient.post('/api/v1/auth/login').send({
       email: ADMIN_EMAIL,
