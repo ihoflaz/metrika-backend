@@ -60,3 +60,15 @@ docker-compose.override.yml
 # Debug
 npm-debug.log*
 lerna-debug.log*
+
+# Documentation
+docs/
+*.sql
+*.csv
+*.md
+*.rst
+*.pdf
+*.docx
+*.pptx
+*.xlsx
+*.txt
