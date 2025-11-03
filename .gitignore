@@ -61,14 +61,19 @@ docker-compose.override.yml
 npm-debug.log*
 lerna-debug.log*
 
-# Documentation
+# Documentation (internal technical docs only)
 docs/
-*.sql
+
+# Data files (exports, backups, temp data)
 *.csv
-*.md
-*.rst
+*.sql
+*.txt
+audit.csv
+backup.sql
+tmpfile.txt
+
+# Document files (not source code documentation)
 *.pdf
 *.docx
 *.pptx
 *.xlsx
-*.txt
