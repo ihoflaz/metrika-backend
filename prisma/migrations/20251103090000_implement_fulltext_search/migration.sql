@@ -120,49 +120,13 @@ CREATE INDEX IF NOT EXISTS "Project_search_vector_idx" ON "Project" USING GIN (s
 -- =============================================
 
 -- Document search performance indexes
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
-    BEGIN
-      EXECUTE 'CREATE INDEX IF NOT EXISTS "Document_title_trgm_idx" ON "Document" USING GIN (title gin_trgm_ops)';
-    EXCEPTION
-      WHEN undefined_object THEN
-        RAISE NOTICE 'Skipping Document_title_trgm_idx because gin_trgm_ops is not available.';
-    END;
-  ELSE
-    RAISE NOTICE 'Skipping Document_title_trgm_idx because pg_trgm is not available.';
-  END IF;
-END$$;
 CREATE INDEX IF NOT EXISTS "Document_tags_idx" ON "Document" USING GIN (tags);
 
 -- Task search performance indexes  
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
-    BEGIN
-      EXECUTE 'CREATE INDEX IF NOT EXISTS "Task_title_trgm_idx" ON "Task" USING GIN (title gin_trgm_ops)';
-    EXCEPTION
-      WHEN undefined_object THEN
-        RAISE NOTICE 'Skipping Task_title_trgm_idx because gin_trgm_ops is not available.';
-    END;
-  ELSE
-    RAISE NOTICE 'Skipping Task_title_trgm_idx because pg_trgm is not available.';
-  END IF;
-END$$;
 CREATE INDEX IF NOT EXISTS "Task_code_idx" ON "Task" (code) WHERE code IS NOT NULL;
 
 -- Project search performance indexes
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
-    BEGIN
-      EXECUTE 'CREATE INDEX IF NOT EXISTS "Project_name_trgm_idx" ON "Project" USING GIN (name gin_trgm_ops)';
-    EXCEPTION
-      WHEN undefined_object THEN
-        RAISE NOTICE 'Skipping Project_name_trgm_idx because gin_trgm_ops is not available.';
-    END;
-  ELSE
-    RAISE NOTICE 'Skipping Project_name_trgm_idx because pg_trgm is not available.';
-  END IF;
-END$$;
 CREATE INDEX IF NOT EXISTS "Project_code_idx" ON "Project" (code);
 
--- Note: pg_trgm extension is required for trigram indexes
--- If it is not available, the trigram-based indexes above will be skipped.
+-- Note: trigram-based indexes (title/code fuzzy search) require pg_trgm extension with superuser privileges and
+-- are intentionally omitted in automated test environments.

@@ -1,41 +1,42 @@
-import { Worker, Job } from 'bullmq';
+﻿import { Worker, Job } from 'bullmq';
+import { createHmac } from 'node:crypto';
+import { PrismaClient, WebhookChannel } from '@prisma/client';
 import { QueueName, redisConnection } from '../../../config/queue.config';
 import { createLogger } from '../../../lib/logger';
-import { PrismaClient } from '@prisma/client';
 import { EmailService } from '../../notifications/email.service';
 
 const logger = createLogger({ name: 'NotificationWorker' });
 const prisma = new PrismaClient();
 
 interface NotificationJobData {
-  userId?: string; // Optional - to[] array kullanılabilir
-  to?: string[]; // Direct email addresses
+  userId?: string;
+  to?: string[];
   cc?: string[];
   bcc?: string[];
-  type: 'EMAIL' | 'IN_APP';
+  type: 'EMAIL' | 'IN_APP' | 'WEBHOOK';
   template: string;
   payload: Record<string, unknown>;
   priority?: number;
+  event?: string;
 }
 
-/**
- * Notification Worker
- * 
- * İşlevler:
- * 1. EMAIL: Email notification gönder (nodemailer + templates)
- * 2. IN_APP: In-app notification oluştur (database'e kaydet)
- * 
- * UPDATED (Day 7): Email sending fully implemented with template support
- */
+interface WebhookPayload {
+  event: string;
+  title: string;
+  message: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+}
+
 class NotificationWorker {
-  private worker: Worker;
+  private worker: Worker<NotificationJobData>;
   private emailService: EmailService | null = null;
 
   constructor() {
     this.worker = new Worker<NotificationJobData>(
       QueueName.NOTIFICATION,
       async (job: Job<NotificationJobData>) => {
-        logger.info({ jobId: job.id, type: job.data.type, userId: job.data.userId }, '🔔 Processing notification job');
+        logger.info({ jobId: job.id, type: job.data.type, userId: job.data.userId }, 'Processing notification job');
 
         try {
           switch (job.data.type) {
@@ -45,20 +46,23 @@ class NotificationWorker {
             case 'IN_APP':
               await this.createInAppNotification(job.data);
               break;
+            case 'WEBHOOK':
+              await this.dispatchWebhook(job.data);
+              break;
             default:
               throw new Error(`Unknown notification type: ${job.data.type}`);
           }
 
-          logger.info({ jobId: job.id, userId: job.data.userId }, '✅ Notification job completed');
+          logger.info({ jobId: job.id, userId: job.data.userId }, 'Notification job completed');
         } catch (error) {
-          logger.error({ jobId: job.id, error }, '❌ Notification job failed');
+          logger.error({ jobId: job.id, error }, 'Notification job failed');
           throw error;
         }
       },
       {
         connection: redisConnection,
-        concurrency: 10, // Yüksek concurrency - notification'lar hızlı gitmeli
-      }
+        concurrency: 10,
+      },
     );
 
     this.worker.on('completed', (job) => {
@@ -69,31 +73,23 @@ class NotificationWorker {
       logger.error({ jobId: job?.id, error: err }, 'Notification job failed');
     });
 
-    logger.info('🚀 NotificationWorker started');
+    logger.info('NotificationWorker started');
   }
 
-  /**
-   * EMAIL: Email notification gönder (FULLY IMPLEMENTED - Day 7)
-   */
   private async sendEmail(data: NotificationJobData): Promise<void> {
     try {
-      // EmailService'i lazy load (ilk çağrıda)
       if (!this.emailService) {
-        // Direkt import et ve oluştur
         const { loadAppConfig } = await import('../../../config/app-config');
         const config = loadAppConfig();
         this.emailService = new EmailService(config, logger);
         logger.info('EmailService initialized in notification worker');
       }
 
-      // Alıcıları belirle
       let recipients: string[] = [];
 
       if (data.to && data.to.length > 0) {
-        // Direct email addresses
         recipients = data.to;
       } else if (data.userId) {
-        // userId'den email al
         const user = await prisma.user.findUnique({
           where: { id: data.userId },
           select: { email: true, fullName: true },
@@ -105,21 +101,14 @@ class NotificationWorker {
         }
 
         recipients = [user.email];
-
-        // Payload'a user bilgisini ekle (template'te kullanılabilir)
-        if (!data.payload.userName) {
-          data.payload.userName = user.fullName;
-        }
-        if (!data.payload.userEmail) {
-          data.payload.userEmail = user.email;
-        }
+        data.payload.userName ??= user.fullName;
+        data.payload.userEmail ??= user.email;
       } else {
         logger.warn({ data }, 'Neither userId nor to[] provided, skipping email');
         return;
       }
 
-      // Email gönder (template ile)
-      const result = await this.emailService!.sendTemplateEmail({
+      const result = await this.emailService.sendTemplateEmail({
         to: recipients,
         cc: data.cc,
         bcc: data.bcc,
@@ -128,24 +117,9 @@ class NotificationWorker {
       });
 
       if (result.success) {
-        logger.info(
-          { 
-            messageId: result.messageId,
-            recipients: result.recipients,
-            template: data.template,
-          },
-          '📧 Email sent successfully'
-        );
+        logger.info({ messageId: result.messageId, recipients: result.recipients, template: data.template }, 'Email sent successfully');
       } else {
-        logger.error(
-          {
-            error: result.error,
-            recipients: result.recipients,
-            template: data.template,
-          },
-          '❌ Email sending failed'
-        );
-        // Retry için exception at
+        logger.error({ recipients: result.recipients, template: data.template, error: result.error }, 'Email sending failed');
         throw new Error(result.error || 'Email sending failed');
       }
     } catch (error) {
@@ -154,39 +128,113 @@ class NotificationWorker {
     }
   }
 
-  /**
-   * IN_APP: In-app notification oluştur
-   */
   private async createInAppNotification(data: NotificationJobData): Promise<void> {
-    logger.info(
-      { 
-        userId: data.userId, 
-        template: data.template 
-      },
-      '🔔 In-app notification placeholder (will be implemented in Week 3)'
-    );
+    if (!data.userId) {
+      logger.warn({ template: data.template }, 'User id missing for in-app notification');
+      return;
+    }
 
-    // TODO (Week 3): In-app notification tablosu oluştur
-    // await prisma.inAppNotification.create({
-    //   data: {
-    //     userId: data.userId,
-    //     type: data.template,
-    //     title: renderTitle(data.template, data.payload),
-    //     message: renderMessage(data.template, data.payload),
-    //     isRead: false,
-    //     payload: data.payload,
-    //   }
-    // });
+    const title = typeof data.payload.title === 'string' ? data.payload.title : data.template;
+    const message = typeof data.payload.message === 'string' ? data.payload.message : '';
+
+    await prisma.notification.create({
+      data: {
+        userId: data.userId,
+        type: data.template,
+        title,
+        message,
+        data: (data.payload.data as Record<string, unknown> | undefined) ?? data.payload,
+      },
+    });
+
+    logger.info({ userId: data.userId, template: data.template }, 'Stored in-app notification');
+  }
+
+  private async dispatchWebhook(data: NotificationJobData): Promise<void> {
+    if (!data.event) {
+      logger.warn({ template: data.template }, 'Webhook job missing event name');
+      return;
+    }
+
+    const payload: WebhookPayload = {
+      event: data.event,
+      title: typeof data.payload.title === 'string' ? data.payload.title : data.template,
+      message: typeof data.payload.message === 'string' ? data.payload.message : '',
+      data: (data.payload.data as Record<string, unknown> | undefined) ?? data.payload,
+      timestamp: new Date().toISOString(),
+    };
+
+    const subscriptions = await prisma.webhookSubscription.findMany({
+      where: { isActive: true, events: { has: data.event } },
+    });
+
+    if (subscriptions.length === 0) {
+      logger.debug({ event: data.event }, 'No webhook subscribers found');
+      return;
+    }
+
+    await Promise.all(
+      subscriptions.map(async (subscription) => {
+        const body = this.buildWebhookBody(subscription.channel, payload);
+        const serialized = JSON.stringify(body);
+        const signature = createHmac('sha256', subscription.secret).update(serialized).digest('hex');
+
+        try {
+          const response = await fetch(subscription.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Metrika-Event': payload.event,
+              'X-Metrika-Timestamp': payload.timestamp,
+              'X-Metrika-Signature': signature,
+            },
+            body: serialized,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Webhook responded with status ${response.status}`);
+          }
+
+          await prisma.webhookSubscription.update({
+            where: { id: subscription.id },
+            data: {
+              failureCount: 0,
+              lastDeliveredAt: new Date(),
+            },
+          });
+
+          logger.info({ subscriptionId: subscription.id, event: payload.event }, 'Webhook delivered');
+        } catch (error) {
+          logger.error({ subscriptionId: subscription.id, event: payload.event, error }, 'Webhook delivery failed');
+          await prisma.webhookSubscription.update({
+            where: { id: subscription.id },
+            data: {
+              failureCount: { increment: 1 },
+              lastDeliveredAt: new Date(),
+            },
+          });
+        }
+      }),
+    );
+  }
+
+  private buildWebhookBody(channel: WebhookChannel, payload: WebhookPayload) {
+    if (channel === WebhookChannel.SLACK || channel === WebhookChannel.TEAMS) {
+      return {
+        text: `[${payload.event}] ${payload.title}\n${payload.message}`,
+      };
+    }
+
+    return payload;
   }
 
   async close(): Promise<void> {
     await this.worker.close();
     await prisma.$disconnect();
-    logger.info('🛑 NotificationWorker stopped');
+    logger.info('NotificationWorker stopped');
   }
 }
 
-// Singleton instance
 let workerInstance: NotificationWorker | null = null;
 
 export function startNotificationWorker(): NotificationWorker {

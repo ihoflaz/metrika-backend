@@ -5,6 +5,8 @@ import type { TaskService } from '../../../modules/tasks/task.service';
 import type { DocumentService } from '../../../modules/documents/document.service';
 import { validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
+import type { AuditService } from '../../../modules/audit/audit.service';
+import type { AuthenticatedRequestUser } from '../../types/auth-context';
 
 const isoDateTimeSchema = z
   .string()
@@ -147,10 +149,12 @@ const serializeDependency = (dependency: Awaited<ReturnType<TaskService['createD
 export class TasksController {
   private readonly taskService: TaskService;
   private readonly documentService: DocumentService;
+  private readonly auditService: AuditService;
 
-  constructor(taskService: TaskService, documentService: DocumentService) {
+  constructor(taskService: TaskService, documentService: DocumentService, auditService: AuditService) {
     this.taskService = taskService;
     this.documentService = documentService;
+    this.auditService = auditService;
     this.searchTasks = TasksController.searchTasks(taskService);
   }
 
@@ -167,6 +171,17 @@ export class TasksController {
       projectId: req.params.projectId,
     });
 
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('TASK_CREATED', {
+      actorId: authUser?.id ?? null,
+      detail: `Created task ${task.title}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        taskId: task.id,
+        projectId: task.project.id,
+      },
+    });
+
     res.status(201).json({
       data: serializeTask(task),
       meta: { requestId: getRequestId(res) },
@@ -181,6 +196,14 @@ export class TasksController {
     });
   };
 
+  getById = async (req: Request, res: Response) => {
+    const task = await this.taskService.getTaskById(req.params.taskId);
+    res.status(200).json({
+      data: serializeTask(task),
+      meta: { requestId: getRequestId(res) },
+    });
+  };
+
   update = async (req: Request, res: Response) => {
     const parsed = updateTaskSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -188,10 +211,38 @@ export class TasksController {
     }
 
     const task = await this.taskService.updateTask(req.params.taskId, parsed.data);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('TASK_UPDATED', {
+      actorId: authUser?.id ?? null,
+      detail: `Updated task ${task.title}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        taskId: task.id,
+        updates: parsed.data,
+      },
+    });
+
     res.status(200).json({
       data: serializeTask(task),
       meta: { requestId: getRequestId(res) },
     });
+  };
+
+  delete = async (req: Request, res: Response) => {
+    await this.taskService.deleteTask(req.params.taskId);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('TASK_DELETED', {
+      actorId: authUser?.id ?? null,
+      detail: `Deleted task ${req.params.taskId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        taskId: req.params.taskId,
+      },
+    });
+
+    res.status(204).send();
   };
 
   listDependencies = async (req: Request, res: Response) => {
@@ -211,6 +262,18 @@ export class TasksController {
 
     const dependency = await this.taskService.createDependency(req.params.taskId, parsed.data);
 
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('TASK_DEPENDENCY_ADDED', {
+      actorId: authUser?.id ?? null,
+      detail: `Added dependency for task ${req.params.taskId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        taskId: req.params.taskId,
+        dependsOnTaskId: parsed.data.dependsOnTaskId,
+        dependencyId: dependency.id,
+      },
+    });
+
     res.status(201).json({
       data: serializeDependency(dependency),
       meta: { requestId: getRequestId(res) },
@@ -219,6 +282,17 @@ export class TasksController {
 
   deleteDependency = async (req: Request, res: Response) => {
     await this.taskService.deleteDependency(req.params.taskId, req.params.dependencyId);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('TASK_DEPENDENCY_REMOVED', {
+      actorId: authUser?.id ?? null,
+      detail: `Removed dependency from task ${req.params.taskId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        taskId: req.params.taskId,
+        dependencyId: req.params.dependencyId,
+      },
+    });
 
     res.status(204).send();
   };

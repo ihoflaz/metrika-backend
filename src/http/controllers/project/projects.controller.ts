@@ -5,6 +5,8 @@ import type { ProjectService } from '../../../modules/projects/project.service';
 import { ProjectClosurePDFService } from '../../../modules/projects/project-closure-pdf.service';
 import { validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
+import type { AuditService } from '../../../modules/audit/audit.service';
+import type { AuthenticatedRequestUser } from '../../types/auth-context';
 
 const isoDateSchema = z
   .string()
@@ -82,10 +84,12 @@ const serializeProject = (project: Awaited<ReturnType<ProjectService['createProj
 export class ProjectsController {
   private readonly projectService: ProjectService;
   private readonly pdfService: ProjectClosurePDFService;
+  private readonly auditService: AuditService;
 
-  constructor(projectService: ProjectService) {
+  constructor(projectService: ProjectService, auditService: AuditService) {
     this.projectService = projectService;
     this.pdfService = new ProjectClosurePDFService();
+    this.auditService = auditService;
   }
 
   create = async (req: Request, res: Response) => {
@@ -95,6 +99,18 @@ export class ProjectsController {
     }
 
     const project = await this.projectService.createProject(parsed.data);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('PROJECT_CREATED', {
+      actorId: authUser?.id ?? null,
+      detail: `Created project ${project.code}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        projectId: project.id,
+        sponsorId: project.sponsorId,
+      },
+    });
+
     res.status(201).json({
       data: serializeProject(project),
       meta: { requestId: getRequestId(res) },
@@ -143,6 +159,18 @@ export class ProjectsController {
     }
 
     const project = await this.projectService.updateProject(req.params.projectId, parsed.data);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('PROJECT_UPDATED', {
+      actorId: authUser?.id ?? null,
+      detail: `Updated project ${project.code}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        projectId: project.id,
+        updates: parsed.data,
+      },
+    });
+
     res.status(200).json({
       data: serializeProject(project),
       meta: { requestId: getRequestId(res) },
@@ -151,6 +179,36 @@ export class ProjectsController {
 
   close = async (req: Request, res: Response) => {
     const project = await this.projectService.closeProject(req.params.projectId);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('PROJECT_CLOSED', {
+      actorId: authUser?.id ?? null,
+      detail: `Closed project ${project.code}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        projectId: project.id,
+      },
+    });
+
+    res.status(200).json({
+      data: serializeProject(project),
+      meta: { requestId: getRequestId(res) },
+    });
+  };
+
+  reopen = async (req: Request, res: Response) => {
+    const project = await this.projectService.reopenProject(req.params.projectId);
+
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
+    await this.auditService.logEvent('PROJECT_REOPENED', {
+      actorId: authUser?.id ?? null,
+      detail: `Reopened project ${project.code}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        projectId: project.id,
+      },
+    });
+
     res.status(200).json({
       data: serializeProject(project),
       meta: { requestId: getRequestId(res) },

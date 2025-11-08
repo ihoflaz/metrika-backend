@@ -39,6 +39,8 @@ export interface CreateAppOptions {
   newApiKeysRouter: Router;
   systemSettingsRouter: Router;
   userPreferencesRouter: Router;
+  notificationsRouter: Router;
+  webhookRouter: Router;
   authMiddleware: RequestHandler;
 }
 
@@ -66,6 +68,8 @@ export const createApp = ({
   newApiKeysRouter,
   systemSettingsRouter,
   userPreferencesRouter,
+  notificationsRouter,
+  webhookRouter,
   authMiddleware,
 }: CreateAppOptions) => {
   const app = express();
@@ -132,6 +136,8 @@ export const createApp = ({
   app.use('/api/v1/kpis', authMiddleware, kpiRouter);
   app.use('/api/v1/reports', authMiddleware, reportsRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
+  app.use('/api/v1/notifications', authMiddleware, notificationsRouter);
+  app.use('/api/v1/webhooks', authMiddleware, webhookRouter);
   app.use('/api/v1/queues', authMiddleware, queueRouter);
   app.use('/api/v1/export', authMiddleware, exportRouter);
   app.use('/api/v1/search', authMiddleware, searchRouter);

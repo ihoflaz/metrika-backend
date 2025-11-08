@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import type { Readable } from 'node:stream';
 import type { Logger } from '../../lib/logger';
@@ -70,6 +71,18 @@ export class DocumentStorageService {
       new DeleteObjectCommand({
         Bucket: this.bucket,
         Key: key,
+      }),
+    );
+  }
+
+  async copyObject(sourceKey: string, targetKey: string): Promise<void> {
+    await this.ensureBucket();
+
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${sourceKey}`,
+        Key: targetKey,
       }),
     );
   }

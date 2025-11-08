@@ -135,10 +135,11 @@ export class QueueService {
     cc?: string[];
     bcc?: string[];
     action?: 'SEND_EMAIL' | 'SEND_TEMPLATE_EMAIL' | 'SEND_BULK_EMAILS';
-    type?: 'EMAIL' | 'IN_APP';
+    type?: 'EMAIL' | 'IN_APP' | 'WEBHOOK';
     template?: string;
     data?: Record<string, unknown>;
     payload?: Record<string, unknown>;
+    event?: string;
     priority?: number;
   }) {
     const queue = this.queues.get(QueueName.NOTIFICATION);
@@ -151,14 +152,14 @@ export class QueueService {
       jobId: `notif-${data.userId || 'multi'}-${jobType}-${Date.now()}`,
     });
 
-    logger.debug({ 
-      jobId: job.id, 
-      userId: data.userId, 
+    logger.debug({
+      jobId: job.id,
+      userId: data.userId,
       to: data.to,
       type: data.type,
       template: data.template,
-    }, '🔔 Notification job added');
-    
+      event: data.event,
+    }, 'Notification job added');
     return job;
   }
 

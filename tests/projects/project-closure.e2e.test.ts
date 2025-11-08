@@ -1,6 +1,20 @@
 import request from 'supertest';
 import { setupTestApp, teardownTestApp, type TestAppContext } from '../utils/test-app';
-import { TaskStatus, ProjectStatus, UserStatus } from '@prisma/client';
+import {
+  Prisma,
+  TaskStatus,
+  ProjectStatus,
+  UserStatus,
+  DocumentVersionStatus,
+  DocumentType,
+  DocumentClassification,
+  DocumentRetentionPolicy,
+  KPIStatus,
+  KPICategory,
+  KPIAggregationPeriod,
+  KPIDataSourceType,
+  KPIPrivacyLevel,
+} from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 import { hashPassword } from '../../src/modules/auth/password.service';
 import { ROLES } from '../../src/modules/rbac/permissions';
@@ -51,6 +65,75 @@ describe('Project Closure (FR-13)', () => {
     return response.body.data.attributes.accessToken as string;
   };
 
+  const createDocumentVersionForProject = async (
+    status: DocumentVersionStatus = DocumentVersionStatus.IN_REVIEW,
+  ) => {
+    const documentId = uuidv7();
+    const versionId = uuidv7();
+    const baseKey = `projects/${testProject.id}/${documentId}`;
+
+    await ctx.prisma.document.create({
+      data: {
+        id: documentId,
+        projectId: testProject.id,
+        title: `Closure Evidence ${Date.now()}`,
+        docType: DocumentType.REPORT,
+        classification: DocumentClassification.INTERNAL,
+        ownerId: adminUser.id,
+        storageKey: `${baseKey}/document.pdf`,
+        retentionPolicy: DocumentRetentionPolicy.DEFAULT,
+      },
+    });
+
+    await ctx.prisma.documentVersion.create({
+      data: {
+        id: versionId,
+        documentId,
+        versionNo: '1.0',
+        status,
+        checksum: crypto.randomUUID().replace(/-/g, ''),
+        sizeBytes: BigInt(4096),
+        mimeType: 'application/pdf',
+        storageKey: `${baseKey}/versions/v1.pdf`,
+        createdBy: adminUser.id,
+      },
+    });
+
+    await ctx.prisma.document.update({
+      where: { id: documentId },
+      data: { currentVersionId: versionId },
+    });
+
+    return { documentId, versionId };
+  };
+
+  const createKpiForProject = async (status: KPIStatus = KPIStatus.BREACHED) => {
+    const code = `KPI-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+    const kpi = await ctx.prisma.kPIDefinition.create({
+      data: {
+        id: uuidv7(),
+        code,
+        name: `Closure KPI ${code}`,
+        description: 'Used in project closure validation tests',
+        category: KPICategory.QUALITY,
+        calculationFormula: 'actual / target',
+        targetValue: new Prisma.Decimal(95),
+        unit: '%',
+        thresholdWarning: new Prisma.Decimal(90),
+        thresholdCritical: new Prisma.Decimal(80),
+        aggregationPeriod: KPIAggregationPeriod.MONTHLY,
+        dataSourceType: KPIDataSourceType.MANUAL,
+        stewardId: adminUser.id,
+        status,
+        privacyLevel: KPIPrivacyLevel.INTERNAL,
+        linkedProjectIds: [testProject.id],
+      },
+    });
+
+    return kpi;
+  };
+
   beforeAll(async () => {
     ctx = await setupTestApp();
 
@@ -92,7 +175,11 @@ describe('Project Closure (FR-13)', () => {
     // Clean up after each test
     if (testProject) {
       await ctx.prisma.task.deleteMany({ where: { projectId: testProject.id } });
+      await ctx.prisma.kPIDefinition.deleteMany({
+        where: { linkedProjectIds: { has: testProject.id } },
+      });
       await ctx.prisma.project.delete({ where: { id: testProject.id } }).catch(() => {});
+      testProject = null;
     }
   });
 
@@ -246,6 +333,102 @@ describe('Project Closure (FR-13)', () => {
       const error = response.body.error || response.body.errors?.[0];
       expect(error).toBeDefined();
       expect(error.code).toContain('NOT_FOUND');
+    });
+
+    it('should fail when there are document versions waiting for approval', async () => {
+      await createDocumentVersionForProject(DocumentVersionStatus.IN_REVIEW);
+
+      const response = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(400);
+
+      const error = response.body.error || response.body.errors?.[0];
+      expect(error).toBeDefined();
+      expect(error.code).toBe('PROJECT_PENDING_DOCUMENT_APPROVALS');
+      expect(error.details || error.detail).toContain('document version');
+    });
+
+    it('should fail when linked KPIs are in BREACHED state', async () => {
+      await createKpiForProject(KPIStatus.BREACHED);
+
+      const response = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(400);
+
+      const error = response.body.error || response.body.errors?.[0];
+      expect(error).toBeDefined();
+      expect(error.code).toBe('PROJECT_PENDING_KPI_BREACHES');
+      expect(error.details || error.detail).toContain('KPI(s) in BREACHED state');
+    });
+
+    it('should allow closing once document reviews and KPI breaches are resolved', async () => {
+      const { versionId } = await createDocumentVersionForProject(DocumentVersionStatus.IN_REVIEW);
+      const kpi = await createKpiForProject(KPIStatus.BREACHED);
+
+      // First attempt blocked by pending document reviews
+      await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(400);
+
+      await ctx.prisma.documentVersion.update({
+        where: { id: versionId },
+        data: { status: DocumentVersionStatus.APPROVED },
+      });
+
+      // Second attempt blocked by KPI breach
+      const secondAttempt = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(400);
+      const secondError = secondAttempt.body.error || secondAttempt.body.errors?.[0];
+      expect(secondError.code).toBe('PROJECT_PENDING_KPI_BREACHES');
+
+      await ctx.prisma.kPIDefinition.update({
+        where: { id: kpi.id },
+        data: { status: KPIStatus.MONITORING },
+      });
+
+      const response = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(response.body.data.attributes.status).toBe(ProjectStatus.CLOSED);
+    });
+  });
+
+  describe('POST /api/v1/projects/:id/reopen', () => {
+    it('should reopen a previously closed project', async () => {
+      await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/close`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const response = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(response.body.data.attributes.status).toBe(ProjectStatus.ACTIVE);
+      expect(response.body.data.attributes.actualEnd).toBeNull();
+
+      const project = await ctx.prisma.project.findUniqueOrThrow({ where: { id: testProject.id } });
+      expect(project.status).toBe(ProjectStatus.ACTIVE);
+      expect(project.actualEnd).toBeNull();
+    });
+
+    it('should fail when reopening an active project', async () => {
+      const response = await ctx.httpClient
+        .post(`/api/v1/projects/${testProject.id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(400);
+
+      const error = response.body.error || response.body.errors?.[0];
+      expect(error).toBeDefined();
+      expect(error.code).toBe('PROJECT_NOT_CLOSED');
     });
   });
 

@@ -4,9 +4,19 @@
  * Week 4 - Day 17-18
  */
 
-import type { PrismaClient, Project, Task, ProjectMember, Prisma } from '@prisma/client';
+import type {
+  PrismaClient,
+  Project,
+  Task,
+  ProjectMember,
+  Prisma,
+  Document,
+  DocumentVersion,
+  DocumentTask,
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { AuditService } from '../audit/audit.service';
+import { DocumentStorageService } from '../storage/document-storage.service';
 
 export interface CloneProjectOptions {
   newCode: string;
@@ -37,6 +47,7 @@ export class ProjectCloneService {
   constructor(
     private prisma: PrismaClient,
     private auditService: AuditService,
+    private documentStorage: DocumentStorageService,
   ) {}
 
   /**
@@ -53,7 +64,16 @@ export class ProjectCloneService {
       include: {
         tasks: true,
         members: true,
-        documents: true,
+        documents: {
+          include: {
+            versions: true,
+            linkedTasks: {
+              select: {
+                taskId: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -120,7 +140,7 @@ export class ProjectCloneService {
       }
 
       // Audit log
-      await this.auditService.logAuthEvent('AUTH_LOGIN_SUCCESS', {
+      await this.auditService.logEvent('PROJECT_CLONED', {
         actorId,
         detail: `Cloned project ${sourceProject.code} to ${options.newCode}`,
         metadata: {
@@ -319,7 +339,12 @@ export class ProjectCloneService {
    */
   private async cloneDocuments(
     tx: Prisma.TransactionClient,
-    sourceDocuments: any[],
+    sourceDocuments: Array<
+      Document & {
+        versions: DocumentVersion[];
+        linkedTasks: Pick<DocumentTask, 'taskId'>[];
+      }
+    >,
     newProjectId: string,
     taskIdMapping: Map<string, string>,
     actorId: string,
@@ -327,26 +352,83 @@ export class ProjectCloneService {
     let count = 0;
 
     for (const doc of sourceDocuments) {
-      // Update linked task IDs
+      const newDocId = randomUUID();
+      const storageKey = `documents/${newDocId}`;
       const newLinkedTaskIds = (doc.linkedTaskIds || [])
         .map((oldTaskId: string) => taskIdMapping.get(oldTaskId))
-        .filter(Boolean);
+        .filter((taskId): taskId is string => Boolean(taskId));
 
       await tx.document.create({
         data: {
-          id: randomUUID(),
+          id: newDocId,
           projectId: newProjectId,
-          title: `${doc.title} (Copy)`,
+          title: doc.title,
           docType: doc.docType,
           classification: doc.classification,
-          ownerId: actorId,
-          storageKey: doc.storageKey, // Keep same storage key (reference only)
+          ownerId: doc.ownerId ?? actorId,
+          storageKey,
           tags: doc.tags,
           linkedTaskIds: newLinkedTaskIds,
           linkedKpiIds: doc.linkedKpiIds || [],
           retentionPolicy: doc.retentionPolicy,
         },
       });
+
+      const versionIdMap = new Map<string, string>();
+
+      for (const version of doc.versions) {
+        const newVersionId = randomUUID();
+        const targetKey = `${storageKey}/${newVersionId}`;
+
+        await this.documentStorage.copyObject(version.storageKey, targetKey);
+
+        await tx.documentVersion.create({
+          data: {
+            id: newVersionId,
+            documentId: newDocId,
+            versionNo: version.versionNo,
+            status: version.status,
+            checksum: version.checksum,
+            sizeBytes: version.sizeBytes,
+            mimeType: version.mimeType,
+            storageKey: targetKey,
+            virusScanStatus: version.virusScanStatus,
+            approvalChain: version.approvalChain,
+            createdBy: actorId,
+          },
+        });
+
+        versionIdMap.set(version.id, newVersionId);
+      }
+
+      if (doc.currentVersionId) {
+        const mappedVersion = versionIdMap.get(doc.currentVersionId);
+        if (mappedVersion) {
+          await tx.document.update({
+            where: { id: newDocId },
+            data: { currentVersionId: mappedVersion },
+          });
+        }
+      }
+
+      if (doc.linkedTasks?.length) {
+        for (const link of doc.linkedTasks) {
+          const mappedTaskId = taskIdMapping.get(link.taskId);
+          if (!mappedTaskId) {
+            continue;
+          }
+
+          await tx.documentTask.create({
+            data: {
+              id: randomUUID(),
+              documentId: newDocId,
+              taskId: mappedTaskId,
+              linkedBy: actorId,
+            },
+          });
+        }
+      }
+
       count++;
     }
 

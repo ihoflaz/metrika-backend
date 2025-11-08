@@ -24,7 +24,8 @@
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
         "prisma:deploy": "prisma migrate deploy",
-        "db:seed": "prisma db seed"
+        "db:seed": "prisma db seed",
+        "seed:demo": "ts-node --transpile-only scripts/seed-demo.ts"
     },
     "keywords": [],
     "author": "",
@@ -85,6 +86,7 @@
         "pino": "^10.1.0",
         "prisma": "^6.18.0",
         "puppeteer": "^21.11.0",
+        "undici": "^7.16.0",
         "uuidv7": "^1.0.2",
         "winston": "^3.18.3",
         "winston-slack-webhook-transport": "^2.3.6",

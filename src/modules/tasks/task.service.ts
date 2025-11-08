@@ -151,6 +151,19 @@ export class TaskService {
     });
   }
 
+  async getTaskById(id: string) {
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      include: taskInclude,
+    });
+
+    if (!task) {
+      throw notFoundError('TASK_NOT_FOUND', 'Task not found');
+    }
+
+    return task;
+  }
+
   async updateTask(id: string, input: UpdateTaskInput) {
     const existing = await this.ensureTask(id);
 
@@ -192,6 +205,11 @@ export class TaskService {
       },
       include: taskInclude,
     });
+  }
+
+  async deleteTask(id: string) {
+    await this.ensureTask(id);
+    await this.prisma.task.delete({ where: { id } });
   }
 
   async listDependencies(taskId: string) {
@@ -240,6 +258,47 @@ export class TaskService {
 
     if (existing) {
       throw badRequestError('TASK_DEPENDENCY_EXISTS', 'Dependency already exists');
+    }
+
+    const dependencies = await this.prisma.taskDependency.findMany({
+      where: { task: { projectId: task.projectId } },
+      select: { taskId: true, dependsOnTaskId: true },
+    });
+
+    const adjacency = dependencies.reduce<Map<string, Set<string>>>((acc, dep) => {
+      if (!acc.has(dep.taskId)) {
+        acc.set(dep.taskId, new Set());
+      }
+      acc.get(dep.taskId)!.add(dep.dependsOnTaskId);
+      return acc;
+    }, new Map());
+
+    const stack = [input.dependsOnTaskId];
+    const visited = new Set<string>();
+
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (current === taskId) {
+        throw badRequestError(
+          'TASK_DEPENDENCY_CYCLE',
+          'Dependency would create a cycle',
+          'The selected dependency introduces a circular relationship',
+        );
+      }
+
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+
+      const next = adjacency.get(current);
+      if (next) {
+        next.forEach((neighbor) => {
+          if (!visited.has(neighbor)) {
+            stack.push(neighbor);
+          }
+        });
+      }
     }
 
     return this.prisma.taskDependency.create({

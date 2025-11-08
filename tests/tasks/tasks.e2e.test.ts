@@ -163,6 +163,20 @@ describe('Task API', () => {
     expect(response.body.data.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('Tekil gorev detayi alinabilir', async () => {
+    const createResponse = await createTask({ title: 'Detay Gorevi' });
+    const taskId = createResponse.body.data.id as string;
+
+    const detailResponse = await context.httpClient
+      .get(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.data.id).toBe(taskId);
+    expect(detailResponse.body.data.attributes.title).toBe('Detay Gorevi');
+    expect(detailResponse.body.data.relationships.project.id).toBe(projectId);
+  });
+
   it('Gorev durumu guncellenebilir ve ilerleme yuzdesi set edilir', async () => {
     const createResponse = await createTask({ title: 'Guncellenecek Gorev' });
     const taskId = createResponse.body.data.id as string;
@@ -175,6 +189,23 @@ describe('Task API', () => {
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.data.attributes.status).toBe('IN_PROGRESS');
     expect(updateResponse.body.data.attributes.progressPct).toBe(50);
+  });
+
+  it('Gorev silindiginde kayit kaldirilir', async () => {
+    const createResponse = await createTask({ title: 'Silinecek Gorev' });
+    const taskId = createResponse.body.data.id as string;
+
+    const deleteResponse = await context.httpClient
+      .delete(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+
+    expect(deleteResponse.status).toBe(204);
+
+    const fetchAfterDelete = await context.httpClient
+      .get(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+
+    expect(fetchAfterDelete.status).toBe(404);
   });
 
   it('Gorev bagimliligi eklenebilir, listelenebilir ve kaldirilabilir', async () => {
@@ -223,6 +254,43 @@ describe('Task API', () => {
     expect(listAfterDelete.body.data.length).toBe(0);
   });
 
+  it('Bagimlilik dongusu olusturulamaz', async () => {
+    const taskA = await createTask({ title: 'Task A' });
+    const taskB = await createTask({ title: 'Task B' });
+    const taskC = await createTask({ title: 'Task C' });
+
+    const taskAId = taskA.body.data.id as string;
+    const taskBId = taskB.body.data.id as string;
+    const taskCId = taskC.body.data.id as string;
+
+    await context.httpClient
+      .post(`/api/v1/tasks/${taskBId}/dependencies`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({
+        dependsOnTaskId: taskAId,
+      })
+      .expect(201);
+
+    await context.httpClient
+      .post(`/api/v1/tasks/${taskCId}/dependencies`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({
+        dependsOnTaskId: taskBId,
+      })
+      .expect(201);
+
+    const cycleResponse = await context.httpClient
+      .post(`/api/v1/tasks/${taskAId}/dependencies`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({
+        dependsOnTaskId: taskCId,
+      });
+
+    expect(cycleResponse.status).toBe(400);
+    const error = cycleResponse.body.error || cycleResponse.body.errors?.[0];
+    expect(error.code).toBe('TASK_DEPENDENCY_CYCLE');
+  });
+
   it('Watcher listesi yonetilebilir', async () => {
     const taskResponse = await createTask({ title: 'Watcher Test Gorevi' });
     const taskId = taskResponse.body.data.id as string;
@@ -245,12 +313,12 @@ describe('Task API', () => {
       .set('Authorization', `Bearer ${pmToken}`);
 
     expect(listResponse.status).toBe(200);
-    const watchersList = listResponse.body.data as Array<{ id: string }>;
+    const watchersList = listResponse.body.data as Array<{ id: string; attributes: { userId: string } }>;
     expect(Array.isArray(watchersList)).toBe(true);
     expect(watchersList.some((item) => item.id === addResponse.body.data.id)).toBe(true);
 
     const removeResponse = await context.httpClient
-      .delete(`/api/v1/tasks/${taskId}/watchers/${addResponse.body.data.id}`)
+      .delete(`/api/v1/tasks/${taskId}/watchers/${watcherUser.id}`)
       .set('Authorization', `Bearer ${pmToken}`);
 
     expect(removeResponse.status).toBe(204);
@@ -260,8 +328,72 @@ describe('Task API', () => {
       .set('Authorization', `Bearer ${pmToken}`);
 
     expect(listAfterDelete.status).toBe(200);
-    const remainingWatchers = listAfterDelete.body.data as Array<{ id: string }>;
-    expect(remainingWatchers.some((item) => item.id === addResponse.body.data.id)).toBe(false);
+    const remainingWatchers = listAfterDelete.body.data as Array<{
+      id: string;
+      attributes: { userId: string };
+    }>;
+    expect(remainingWatchers.some((item) => item.attributes.userId === watcherUser.id)).toBe(false);
+  });
+
+  it('Yorum guncellenip silinebilir', async () => {
+    const taskResponse = await createTask({ title: 'Yorum Duzenleme Gorevi' });
+    const taskId = taskResponse.body.data.id as string;
+
+    const commentResponse = await context.httpClient
+      .post(`/api/v1/tasks/${taskId}/comments`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ body: 'Ilk yorum' });
+
+    expect(commentResponse.status).toBe(201);
+
+    const commentId = commentResponse.body.data.id as string;
+
+    const updateResponse = await context.httpClient
+      .patch(`/api/v1/tasks/${taskId}/comments/${commentId}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ body: 'Guncellenmis yorum' });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.data.attributes.body).toBe('Guncellenmis yorum');
+
+    const deleteResponse = await context.httpClient
+      .delete(`/api/v1/tasks/${taskId}/comments/${commentId}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+
+    expect(deleteResponse.status).toBe(204);
+
+    const listResponse = await context.httpClient
+      .get(`/api/v1/tasks/${taskId}/comments`)
+      .set('Authorization', `Bearer ${pmToken}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data).toHaveLength(0);
+  });
+
+  it('Yorum sadece yazari tarafindan guncellenebilir', async () => {
+    const taskResponse = await createTask({ title: 'Yorum Yetki Testi' });
+    const taskId = taskResponse.body.data.id as string;
+
+    const commentResponse = await context.httpClient
+      .post(`/api/v1/tasks/${taskId}/comments`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ body: 'Yetkili yorum' });
+
+    const commentId = commentResponse.body.data.id as string;
+
+    const otherUser = await createRoleUser(prisma, ROLES.TEAM_MEMBER, {
+      email: 'comment-editor@metrika.local',
+    });
+    const otherToken = await login(otherUser.email, otherUser.password);
+
+    const forbiddenResponse = await context.httpClient
+      .patch(`/api/v1/tasks/${taskId}/comments/${commentId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ body: 'Ben degistirmek istiyorum' });
+
+    expect(forbiddenResponse.status).toBe(403);
+    const error = forbiddenResponse.body.error || forbiddenResponse.body.errors?.[0];
+    expect(error.code).toBe('TASK_COMMENT_FORBIDDEN');
   });
 
   it('Yorum eklenince bildirim e-postalari gonderilir', async () => {

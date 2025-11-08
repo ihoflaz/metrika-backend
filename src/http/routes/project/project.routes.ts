@@ -33,6 +33,7 @@ export const createProjectRouter = (
   router.get('/:projectId', requirePermissions(PERMISSIONS.PROJECT_READ), controller.getById);
   router.patch('/:projectId', requirePermissions(PERMISSIONS.PROJECT_WRITE), controller.update);
   router.post('/:projectId/close', requirePermissions(PERMISSIONS.PROJECT_WRITE), controller.close);
+  router.post('/:projectId/reopen', requirePermissions(PERMISSIONS.PROJECT_WRITE), controller.reopen);
   router.get(
     '/:projectId/closure-report',
     requirePermissions(PERMISSIONS.PROJECT_READ),

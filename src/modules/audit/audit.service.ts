@@ -24,7 +24,26 @@ export type AuditEventCode =
   | 'AUTH_REFRESH_FAILED'
   | 'AUTH_LOGOUT'
   | 'AUTH_PASSWORD_CHANGE_SUCCESS'
-  | 'AUTH_PASSWORD_CHANGE_FAILED';
+  | 'AUTH_PASSWORD_CHANGE_FAILED'
+  | 'PROJECT_CREATED'
+  | 'PROJECT_UPDATED'
+  | 'PROJECT_CLOSED'
+  | 'PROJECT_REOPENED'
+  | 'PROJECT_CLONED'
+  | 'TASK_CREATED'
+  | 'TASK_UPDATED'
+  | 'TASK_DELETED'
+  | 'TASK_DEPENDENCY_ADDED'
+  | 'TASK_DEPENDENCY_REMOVED'
+  | 'TASK_COMMENT_CREATED'
+  | 'TASK_COMMENT_UPDATED'
+  | 'TASK_COMMENT_DELETED'
+  | 'DOCUMENT_CREATED'
+  | 'DOCUMENT_VERSION_SUBMITTED'
+  | 'DOCUMENT_APPROVED'
+  | 'DOCUMENT_REJECTED'
+  | 'DOCUMENT_LINKED_TASK'
+  | 'DOCUMENT_UNLINKED_TASK';
 
 export type ExportFormat = 'json' | 'csv';
 
@@ -47,6 +66,10 @@ export class AuditService {
   }
 
   async logAuthEvent(eventCode: AuditEventCode, payload: AuditEventPayload) {
+    await this.logEvent(eventCode, payload);
+  }
+
+  async logEvent(eventCode: AuditEventCode, payload: AuditEventPayload) {
     try {
       const metadata: Prisma.InputJsonValue = {
         ...payload.metadata,

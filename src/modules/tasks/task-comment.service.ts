@@ -1,7 +1,7 @@
 import { PrismaClient, TaskStatus, type Prisma } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 import type { Logger } from '../../lib/logger';
-import { badRequestError, notFoundError } from '../../common/errors';
+import { badRequestError, forbiddenError, notFoundError } from '../../common/errors';
 import type { EmailService } from '../notifications/email.service';
 
 const commentInclude = {
@@ -103,6 +103,56 @@ export class TaskCommentService {
     await this.notifyRecipients(taskId, task.title, task.status, author, task, body);
 
     return comment;
+  }
+
+  async updateComment(taskId: string, commentId: string, authorId: string, body: string) {
+    if (body.trim().length === 0) {
+      throw badRequestError('TASK_COMMENT_INVALID', 'Comment body cannot be empty');
+    }
+
+    const existing = await this.prisma.taskComment.findUnique({
+      where: { id: commentId },
+      include: commentInclude,
+    });
+
+    if (!existing || existing.taskId !== taskId) {
+      throw notFoundError('TASK_COMMENT_NOT_FOUND', 'Task comment not found');
+    }
+
+    if (existing.authorId !== authorId) {
+      throw forbiddenError(
+        'TASK_COMMENT_FORBIDDEN',
+        'You are not allowed to modify this comment',
+      );
+    }
+
+    return this.prisma.taskComment.update({
+      where: { id: commentId },
+      data: { body },
+      include: commentInclude,
+    });
+  }
+
+  async deleteComment(taskId: string, commentId: string, authorId: string) {
+    const existing = await this.prisma.taskComment.findUnique({
+      where: { id: commentId },
+      select: { id: true, taskId: true, authorId: true },
+    });
+
+    if (!existing || existing.taskId !== taskId) {
+      throw notFoundError('TASK_COMMENT_NOT_FOUND', 'Task comment not found');
+    }
+
+    if (existing.authorId !== authorId) {
+      throw forbiddenError(
+        'TASK_COMMENT_FORBIDDEN',
+        'You are not allowed to delete this comment',
+      );
+    }
+
+    await this.prisma.taskComment.delete({
+      where: { id: existing.id },
+    });
   }
 
   private async notifyRecipients(

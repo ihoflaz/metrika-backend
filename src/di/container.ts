@@ -26,6 +26,8 @@ import { VirusScannerService } from '../modules/security/virus-scanner.service';
 import { DocumentService } from '../modules/documents/document.service';
 import { DocumentApprovalQueueService } from '../modules/documents/document-approval-queue.service';
 import { EmailService } from '../modules/notifications/email.service';
+import { InAppNotificationService } from '../modules/notifications/in-app-notification.service';
+import { WebhookSubscriptionService } from '../modules/notifications/webhook-subscription.service';
 import { KPIService } from '../modules/kpi/kpi.service';
 import { KPIMonitoringQueueService } from '../modules/kpi/kpi-monitoring-queue.service';
 import { ReportService } from '../modules/reports/report.service';
@@ -45,6 +47,8 @@ import { DocumentsController } from '../http/controllers/document/documents.cont
 import { KPIController } from '../http/controllers/kpi/kpi.controller';
 import { ReportsController } from '../http/controllers/report/reports.controller';
 import { AuditController } from '../http/controllers/audit/audit.controller';
+import { UserNotificationsController } from '../http/controllers/notifications/notifications.controller';
+import { WebhookController } from '../http/controllers/notifications/webhook.controller';
 import { KanbanController } from '../http/controllers/project/kanban.controller';
 import { createAuthRouter } from '../http/routes/auth.routes';
 import { createUserRouter } from '../http/routes/user.routes';
@@ -65,6 +69,8 @@ import {
 import { createKPIRouter } from '../http/routes/kpi/kpi.routes';
 import { createReportsRouter } from '../http/routes/report/report.routes';
 import { createAuditRouter } from '../http/routes/audit/audit.routes';
+import { createNotificationsRouter } from '../http/routes/notification/notification.routes';
+import { createWebhookRouter } from '../http/routes/webhook/webhook.routes';
 import { createQueueRouter } from '../http/routes/queue/queue.routes';
 import { KanbanService } from '../modules/projects/kanban.service';
 import { SearchService } from '../modules/search/search.service';
@@ -97,6 +103,8 @@ export interface AppDependencies {
   documentService: DocumentService;
   documentApprovalQueueService: DocumentApprovalQueueService;
   emailService: EmailService;
+  inAppNotificationService: InAppNotificationService;
+  webhookSubscriptionService: WebhookSubscriptionService;
   kpiService: KPIService;
   kpiMonitoringQueueService: KPIMonitoringQueueService;
   reportService: ReportService;
@@ -117,6 +125,8 @@ export interface AppDependencies {
   kpiController: KPIController;
   reportsController: ReportsController;
   auditController: AuditController;
+  userNotificationsController: UserNotificationsController;
+  webhookController: WebhookController;
   kanbanService: KanbanService;
   kanbanController: KanbanController;
   searchService: SearchService;
@@ -136,6 +146,8 @@ export interface AppDependencies {
   kpiRouter: Router;
   reportsRouter: Router;
   auditRouter: Router;
+  notificationsRouter: Router;
+  webhookRouter: Router;
   queueRouter: Router;
   exportRouter: Router;
   monitoringRouter: Router;
@@ -194,8 +206,12 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         new ProjectMemberService(prisma, logger),
     ).singleton(),
     projectCloneService: asFunction(
-      ({ prisma, auditService }: Pick<AppDependencies, 'prisma' | 'auditService'>) =>
-        new ProjectCloneService(prisma, auditService),
+      ({
+        prisma,
+        auditService,
+        documentStorageService,
+      }: Pick<AppDependencies, 'prisma' | 'auditService' | 'documentStorageService'>) =>
+        new ProjectCloneService(prisma, auditService, documentStorageService),
     ).singleton(),
     taskService: asFunction(
       ({ prisma }: Pick<AppDependencies, 'prisma'>) => new TaskService(prisma),
@@ -203,6 +219,12 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
     emailService: asFunction(
       ({ config, logger }: Pick<AppDependencies, 'config' | 'logger'>) =>
         new EmailService(config, logger),
+    ).singleton(),
+    inAppNotificationService: asFunction(
+      ({ prisma }: Pick<AppDependencies, 'prisma'>) => new InAppNotificationService(prisma),
+    ).singleton(),
+    webhookSubscriptionService: asFunction(
+      ({ prisma }: Pick<AppDependencies, 'prisma'>) => new WebhookSubscriptionService(prisma),
     ).singleton(),
     kpiService: asFunction(
       ({ prisma, logger }: Pick<AppDependencies, 'prisma' | 'logger'>) =>
@@ -356,8 +378,8 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         new UserPreferencesController(userPreferencesService),
     ).singleton(),
     projectsController: asFunction(
-      ({ projectService }: Pick<AppDependencies, 'projectService'>) =>
-        new ProjectsController(projectService),
+      ({ projectService, auditService }: Pick<AppDependencies, 'projectService' | 'auditService'>) =>
+        new ProjectsController(projectService, auditService),
     ).singleton(),
     projectMembersController: asFunction(
       ({ projectMemberService }: Pick<AppDependencies, 'projectMemberService'>) =>
@@ -368,20 +390,24 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         new ProjectCloneController(projectCloneService),
     ).singleton(),
     tasksController: asFunction(
-      ({ taskService, documentService }: Pick<AppDependencies, 'taskService' | 'documentService'>) =>
-        new TasksController(taskService, documentService),
+      ({
+        taskService,
+        documentService,
+        auditService,
+      }: Pick<AppDependencies, 'taskService' | 'documentService' | 'auditService'>) =>
+        new TasksController(taskService, documentService, auditService),
     ).singleton(),
     taskWatchersController: asFunction(
       ({ taskWatcherService }: Pick<AppDependencies, 'taskWatcherService'>) =>
         new TaskWatchersController(taskWatcherService),
     ).singleton(),
     taskCommentsController: asFunction(
-      ({ taskCommentService }: Pick<AppDependencies, 'taskCommentService'>) =>
-        new TaskCommentsController(taskCommentService),
+      ({ taskCommentService, auditService }: Pick<AppDependencies, 'taskCommentService' | 'auditService'>) =>
+        new TaskCommentsController(taskCommentService, auditService),
     ).singleton(),
     documentsController: asFunction(
-      ({ documentService }: Pick<AppDependencies, 'documentService'>) =>
-        new DocumentsController(documentService),
+      ({ documentService, auditService }: Pick<AppDependencies, 'documentService' | 'auditService'>) =>
+        new DocumentsController(documentService, auditService),
     ).singleton(),
     kpiController: asFunction(
       ({ kpiService }: Pick<AppDependencies, 'kpiService'>) => new KPIController(kpiService),
@@ -393,6 +419,14 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
     auditController: asFunction(
       ({ auditService, logger }: Pick<AppDependencies, 'auditService' | 'logger'>) =>
         new AuditController(auditService, logger),
+    ).singleton(),
+    userNotificationsController: asFunction(
+      ({ inAppNotificationService }: Pick<AppDependencies, 'inAppNotificationService'>) =>
+        new UserNotificationsController(inAppNotificationService),
+    ).singleton(),
+    webhookController: asFunction(
+      ({ webhookSubscriptionService }: Pick<AppDependencies, 'webhookSubscriptionService'>) =>
+        new WebhookController(webhookSubscriptionService),
     ).singleton(),
     kanbanService: asFunction(
       ({ prisma }: Pick<AppDependencies, 'prisma'>) => new KanbanService(prisma),
@@ -479,6 +513,14 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
       ({ auditController, authMiddleware }: Pick<AppDependencies, 'auditController' | 'authMiddleware'>) =>
         createAuditRouter(auditController, authMiddleware),
     ).singleton(),
+    notificationsRouter: asFunction(
+      ({ userNotificationsController }: Pick<AppDependencies, 'userNotificationsController'>) =>
+        createNotificationsRouter(userNotificationsController),
+    ).singleton(),
+    webhookRouter: asFunction(
+      ({ webhookController }: Pick<AppDependencies, 'webhookController'>) =>
+        createWebhookRouter(webhookController),
+    ).singleton(),
     queueRouter: asFunction(() => createQueueRouter()).singleton(),
     exportRouter: asFunction(() => createExportRouter()).singleton(),
     monitoringRouter: asFunction(() => createMonitoringRouter()).singleton(),
@@ -508,6 +550,8 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         newApiKeysRouter,
         systemSettingsRouter,
         userPreferencesRouter,
+        notificationsRouter,
+        webhookRouter,
         authMiddleware,
       }: Pick<
         AppDependencies,
@@ -534,6 +578,8 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         | 'newApiKeysRouter'
         | 'systemSettingsRouter'
         | 'userPreferencesRouter'
+        | 'notificationsRouter'
+        | 'webhookRouter'
         | 'authMiddleware'
       >) =>
         createApp({
@@ -560,6 +606,8 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
           newApiKeysRouter,
           systemSettingsRouter,
           userPreferencesRouter,
+          notificationsRouter,
+          webhookRouter,
           authMiddleware,
         }),
     ).singleton(),

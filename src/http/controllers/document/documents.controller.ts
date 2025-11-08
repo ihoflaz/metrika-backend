@@ -13,6 +13,7 @@ import type {
 import { validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 import type { AuthenticatedRequestUser } from '../../types/auth-context';
+import type { AuditService } from '../../../modules/audit/audit.service';
 
 const createDocumentSchema = z.object({
   title: z.string().trim().min(3),
@@ -108,8 +109,11 @@ const serializeDocument = (document: Awaited<ReturnType<DocumentService['getDocu
 export class DocumentsController {
   private readonly documentService: DocumentService;
 
-  constructor(documentService: DocumentService) {
+  private readonly auditService: AuditService;
+
+  constructor(documentService: DocumentService, auditService: AuditService) {
     this.documentService = documentService;
+    this.auditService = auditService;
     this.searchDocuments = DocumentsController.searchDocuments(documentService);
   }
 
@@ -137,6 +141,17 @@ export class DocumentsController {
       parsed.data,
       DocumentsController.mapFilePayload(file),
     );
+
+    await this.auditService.logEvent('DOCUMENT_CREATED', {
+      actorId: authUser.id,
+      detail: `Uploaded document ${document.title}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        documentId: document.id,
+        projectId: document.projectId,
+        ownerId: document.ownerId,
+      },
+    });
 
     res.status(201).json({
       data: serializeDocument(document),
@@ -187,6 +202,17 @@ export class DocumentsController {
       DocumentsController.mapFilePayload(file),
     );
 
+    await this.auditService.logEvent('DOCUMENT_VERSION_SUBMITTED', {
+      actorId: authUser.id,
+      detail: `Uploaded new version for document ${req.params.documentId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        documentId: req.params.documentId,
+        versionId: version.id,
+        versionNo: version.versionNo,
+      },
+    });
+
     res.status(201).json({
       data: {
         type: 'documentVersion',
@@ -222,6 +248,21 @@ export class DocumentsController {
       authUser.id,
       parsed.data,
     );
+
+    const eventCode =
+      parsed.data.decision === DocumentApprovalDecision.APPROVED
+        ? 'DOCUMENT_APPROVED'
+        : 'DOCUMENT_REJECTED';
+    await this.auditService.logEvent(eventCode, {
+      actorId: authUser.id,
+      detail: `${parsed.data.decision === DocumentApprovalDecision.APPROVED ? 'Approved' : 'Rejected'} document version ${req.params.versionId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        documentId: result.version.documentId,
+        versionId: req.params.versionId,
+        decision: parsed.data.decision,
+      },
+    });
 
     res.status(200).json({
       data: {
@@ -333,6 +374,17 @@ export class DocumentsController {
       authUser.id,
     );
 
+    await this.auditService.logEvent('DOCUMENT_LINKED_TASK', {
+      actorId: authUser.id,
+      detail: `Linked document ${req.params.documentId} to task ${parsed.data.taskId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        documentId: req.params.documentId,
+        taskId: parsed.data.taskId,
+        linkId: link.id,
+      },
+    });
+
     res.status(201).json({
       data: {
         type: 'document-task-link',
@@ -363,10 +415,22 @@ export class DocumentsController {
    * DELETE /api/v1/documents/:documentId/unlink-task/:taskId
    */
   unlinkFromTask = async (req: Request, res: Response) => {
+    const { authUser } = res.locals as { authUser?: AuthenticatedRequestUser };
     const result = await this.documentService.unlinkDocumentFromTask(
       req.params.documentId,
       req.params.taskId,
     );
+
+    await this.auditService.logEvent('DOCUMENT_UNLINKED_TASK', {
+      actorId: authUser?.id ?? null,
+      detail: `Unlinked document ${req.params.documentId} from task ${req.params.taskId}`,
+      context: { requestId: getRequestId(res) },
+      metadata: {
+        documentId: req.params.documentId,
+        taskId: req.params.taskId,
+        linkId: result.linkId,
+      },
+    });
 
     res.status(200).json({
       data: {

@@ -1,4 +1,11 @@
-import { PrismaClient, ProjectStatus, TaskStatus, Prisma } from '@prisma/client';
+import {
+  PrismaClient,
+  ProjectStatus,
+  TaskStatus,
+  Prisma,
+  DocumentVersionStatus,
+  KPIStatus,
+} from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 import { badRequestError, notFoundError } from '../../common/errors';
 import { ProjectCodeService } from './project-code.service';
@@ -240,26 +247,50 @@ export class ProjectService {
   async closeProject(id: string) {
     await this.ensureProjectExists(id);
 
-    // Validate: All tasks must be COMPLETED or CANCELLED
-    const incompleteTasks = await this.prisma.task.findMany({
-      where: {
-        projectId: id,
-        status: {
-          notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED],
+    const [incompleteTasks, pendingDocumentReviews, breachedKpis] = await Promise.all([
+      this.prisma.task.count({
+        where: {
+          projectId: id,
+          status: {
+            notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED],
+          },
         },
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-      },
-    });
+      }),
+      this.prisma.documentVersion.count({
+        where: {
+          document: { projectId: id },
+          status: DocumentVersionStatus.IN_REVIEW,
+        },
+      }),
+      this.prisma.kPIDefinition.count({
+        where: {
+          linkedProjectIds: { has: id },
+          status: KPIStatus.BREACHED,
+        },
+      }),
+    ]);
 
-    if (incompleteTasks.length > 0) {
+    if (incompleteTasks > 0) {
       throw badRequestError(
         'PROJECT_HAS_INCOMPLETE_TASKS',
         'Cannot close project with incomplete tasks',
-        `Project has ${incompleteTasks.length} incomplete task(s). All tasks must be COMPLETED or CANCELLED before closing the project.`,
+        `Project has ${incompleteTasks} incomplete task(s). All tasks must be COMPLETED or CANCELLED before closing the project.`,
+      );
+    }
+
+    if (pendingDocumentReviews > 0) {
+      throw badRequestError(
+        'PROJECT_PENDING_DOCUMENT_APPROVALS',
+        'Cannot close project while documents await approval',
+        `${pendingDocumentReviews} document version(s) are still in review.`,
+      );
+    }
+
+    if (breachedKpis > 0) {
+      throw badRequestError(
+        'PROJECT_PENDING_KPI_BREACHES',
+        'Cannot close project while KPI breaches remain open',
+        `There are ${breachedKpis} KPI(s) in BREACHED state linked to this project.`,
       );
     }
 
@@ -269,6 +300,32 @@ export class ProjectService {
       data: {
         status: ProjectStatus.CLOSED,
         actualEnd: new Date(),
+      },
+    });
+  }
+
+  async reopenProject(id: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+
+    if (!project) {
+      throw notFoundError('PROJECT_NOT_FOUND', 'Project not found');
+    }
+
+    if (project.status !== ProjectStatus.CLOSED && project.status !== ProjectStatus.CANCELLED) {
+      throw badRequestError(
+        'PROJECT_NOT_CLOSED',
+        'Only closed or cancelled projects can be reopened',
+      );
+    }
+
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        status: ProjectStatus.ACTIVE,
+        actualEnd: null,
       },
     });
   }

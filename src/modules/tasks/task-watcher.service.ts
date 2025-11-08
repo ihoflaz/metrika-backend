@@ -62,18 +62,30 @@ export class TaskWatcherService {
     });
   }
 
-  async removeWatcher(taskId: string, watcherId: string) {
-    const watcher = await this.prisma.taskWatcher.findUnique({
-      where: { id: watcherId },
-      select: { id: true, taskId: true },
+  async removeWatcher(taskId: string, identifier: string) {
+    let watcher = await this.prisma.taskWatcher.findUnique({
+      where: { id: identifier },
+      select: { id: true, taskId: true, userId: true },
     });
+
+    if (!watcher) {
+      watcher = await this.prisma.taskWatcher.findUnique({
+        where: {
+          taskId_userId: {
+            taskId,
+            userId: identifier,
+          },
+        },
+        select: { id: true, taskId: true, userId: true },
+      });
+    }
 
     if (!watcher || watcher.taskId !== taskId) {
       throw notFoundError('TASK_WATCHER_NOT_FOUND', 'Task watcher not found');
     }
 
     await this.prisma.taskWatcher.delete({
-      where: { id: watcherId },
+      where: { id: watcher.id },
     });
   }
 

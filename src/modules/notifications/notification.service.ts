@@ -1,12 +1,14 @@
-import { PrismaClient } from '@prisma/client';
+﻿import { PrismaClient } from '@prisma/client';
 import { EmailService } from './email.service';
 import { emailTemplateService } from './email-template.service';
 import { createLogger } from '../../lib/logger';
 import { loadAppConfig } from '../../config/app-config';
+import { getQueueService } from '../automation/queue.service';
 
 const logger = createLogger({ name: 'NotificationService' });
 const prisma = new PrismaClient();
 const appConfig = loadAppConfig();
+const queueService = getQueueService();
 
 export interface TaskDelayedNotification {
   type: 'task-delayed';
@@ -129,11 +131,16 @@ export type NotificationData =
   | WelcomeNotification
   | WeeklyDigestNotification;
 
+type NotificationContent = {
+  title: string;
+  message: string;
+};
+
 /**
  * Merkezi Notification Service
  * 
- * Tüm worker'ların kullandığı notification gönderim servisi.
- * Email template seçimi ve gönderimini yönetir.
+ * TÃ¼m worker'larÄ±n kullandÄ±ÄŸÄ± notification gÃ¶nderim servisi.
+ * Email template seÃ§imi ve gÃ¶nderimini yÃ¶netir.
  */
 export class NotificationService {
   private emailService: EmailService;
@@ -143,7 +150,7 @@ export class NotificationService {
   }
 
   /**
-   * Notification gönder (template'e göre)
+   * Notification gÃ¶nder (template'e gÃ¶re)
    */
   async send(notification: NotificationData): Promise<boolean> {
     try {
@@ -175,6 +182,7 @@ export class NotificationService {
           },
           'Notification sent successfully'
         );
+        await this.dispatchSecondaryChannels(recipient, notification, templateData);
         return true;
       } else {
         logger.error(
@@ -200,7 +208,7 @@ export class NotificationService {
   }
 
   /**
-   * Batch notification gönder
+   * Batch notification gÃ¶nder
    */
   async sendBatch(notifications: NotificationData[]): Promise<number> {
     let successCount = 0;
@@ -247,7 +255,7 @@ export class NotificationService {
   }
 
   /**
-   * Template data'yı hazırla
+   * Template data'yÄ± hazÄ±rla
    */
   private prepareTemplateData(notification: NotificationData): Record<string, any> {
     switch (notification.type) {
@@ -354,7 +362,7 @@ export class NotificationService {
   }
 
   /**
-   * Alıcı email'ini belirle
+   * AlÄ±cÄ± email'ini belirle
    */
   private getRecipient(notification: NotificationData): string {
     switch (notification.type) {
@@ -377,6 +385,123 @@ export class NotificationService {
     }
   }
 
+  private async dispatchSecondaryChannels(
+    recipientEmail: string,
+    notification: NotificationData,
+    templateData: Record<string, unknown>,
+  ) {
+    try {
+      const content = this.buildContent(notification);
+      await Promise.all([
+        this.dispatchInAppNotification(recipientEmail, notification, content, templateData),
+        this.dispatchWebhookNotification(notification, content, templateData),
+      ]);
+    } catch (error) {
+      logger.error(
+        { notificationType: notification.type, error },
+        'Failed to dispatch secondary notification channels',
+      );
+    }
+  }
+
+  private async dispatchInAppNotification(
+    recipientEmail: string,
+    notification: NotificationData,
+    content: NotificationContent,
+    templateData: Record<string, unknown>,
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { email: recipientEmail },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return;
+    }
+
+    await queueService.addNotificationJob({
+      type: 'IN_APP',
+      userId: user.id,
+      template: notification.type,
+      payload: {
+        title: content.title,
+        message: content.message,
+        data: templateData,
+      },
+    });
+  }
+
+  private async dispatchWebhookNotification(
+    notification: NotificationData,
+    content: NotificationContent,
+    templateData: Record<string, unknown>,
+  ) {
+    await queueService.addNotificationJob({
+      type: 'WEBHOOK',
+      template: notification.type,
+      event: notification.type,
+      payload: {
+        title: content.title,
+        message: content.message,
+        data: templateData,
+      },
+    });
+  }
+
+  private buildContent(notification: NotificationData): NotificationContent {
+    switch (notification.type) {
+      case 'task-delayed':
+        return {
+          title: `Görev gecikti: ${notification.taskTitle}`,
+          message: `${notification.projectName} projesinde ${notification.delayDays} gündür bekleyen görev mevcut.`,
+        };
+      case 'task-assigned':
+        return {
+          title: `Yeni görev ataması: ${notification.taskTitle}`,
+          message: `${notification.assignedByName}, görevi ${notification.assignedToName} kişisine atadı.`,
+        };
+      case 'task-completed':
+        return {
+          title: `Görev tamamlandı: ${notification.taskTitle}`,
+          message: `${notification.completedByName} görevi tamamladı.`,
+        };
+      case 'task-escalated':
+        return {
+          title: `Görev eskalasyonu: ${notification.taskTitle}`,
+          message: `${notification.delayDays} gündür bekleyen görev ${notification.escalationLevel} seviyesine yükseltildi.`,
+        };
+      case 'kpi-breach':
+        return {
+          title: `KPI ihlali: ${notification.kpiName}`,
+          message: `Mevcut değer ${notification.currentValue} ile ${notification.severity.toUpperCase()} seviyesinde.`,
+        };
+      case 'document-approval-reminder':
+        return {
+          title: `Doküman onay hatırlatması: ${notification.documentName}`,
+          message: `${notification.pendingDays} gündür onay bekliyor.`,
+        };
+      case 'document-approved':
+        return {
+          title: `Doküman onaylandı: ${notification.documentName}`,
+          message: `${notification.approverName} tarafından onaylandı.`,
+        };
+      case 'welcome':
+        return {
+          title: 'Metrika’ya hoş geldiniz!',
+          message: `${notification.userName}, giriş yaparak kuruluma devam edebilirsiniz.`,
+        };
+      case 'weekly-digest':
+        return {
+          title: `Haftalık özet (${notification.weekStartDate} - ${notification.weekEndDate})`,
+          message: `Tamamlanan görevler: ${notification.tasksCompleted}, devam eden: ${notification.tasksInProgress}, geciken: ${notification.tasksOverdue}.`,
+        };
+      default:
+        return {
+          title: notification.type,
+          message: '',
+        };
+    }
+  }
   /**
    * Rate limiting helper
    */
@@ -394,3 +519,4 @@ export class NotificationService {
 
 // Singleton instance
 export const notificationService = new NotificationService();
+

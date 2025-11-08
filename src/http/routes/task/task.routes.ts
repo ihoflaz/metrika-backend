@@ -37,7 +37,9 @@ export const createTaskRouter = (
   router.get('/bulk/stats/:projectId', requirePermissions(PERMISSIONS.PROJECT_READ), bulkOpsController.getBulkOperationStats);
 
   // Individual task routes
+  router.get('/:taskId', requirePermissions(PERMISSIONS.TASK_READ), controller.getById);
   router.patch('/:taskId', requirePermissions(PERMISSIONS.TASK_WRITE), controller.update);
+  router.delete('/:taskId', requirePermissions(PERMISSIONS.TASK_WRITE), controller.delete);
   
   // Kanban move
   router.patch('/:taskId/move', requirePermissions(PERMISSIONS.TASK_WRITE), kanbanController.moveTask);
@@ -67,6 +69,16 @@ export const createTaskRouter = (
     '/:taskId/comments',
     requirePermissions(PERMISSIONS.TASK_WRITE),
     commentsController.create,
+  );
+  router.patch(
+    '/:taskId/comments/:commentId',
+    requirePermissions(PERMISSIONS.TASK_WRITE),
+    commentsController.update,
+  );
+  router.delete(
+    '/:taskId/comments/:commentId',
+    requirePermissions(PERMISSIONS.TASK_WRITE),
+    commentsController.remove,
   );
 
   router.get(
