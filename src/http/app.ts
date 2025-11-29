@@ -44,6 +44,8 @@ export interface CreateAppOptions {
   authMiddleware: RequestHandler;
 }
 
+import { apiKeyMiddleware } from './middleware/auth/api-key.middleware';
+
 export const createApp = ({
   logger,
   config,
@@ -75,10 +77,10 @@ export const createApp = ({
   const app = express();
 
   app.disable('x-powered-by');
-  
+
   // CORS configuration
   const corsOptions: cors.CorsOptions = {
-    origin: process.env.CORS_ORIGINS 
+    origin: process.env.CORS_ORIGINS
       ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
       : ['http://localhost:3000', 'http://localhost:5173'], // Default for local development
     credentials: true,
@@ -88,15 +90,15 @@ export const createApp = ({
     maxAge: 86400, // 24 hours
   };
   app.use(cors(corsOptions));
-  
+
   app.locals.config = config;
-  
+
   // Add container to res.locals for dependency injection
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.locals.container = container;
     next();
   });
-  
+
   app.use(requestContextMiddleware);
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
@@ -112,9 +114,11 @@ export const createApp = ({
     next();
   });
 
+  app.use(apiKeyMiddleware);
+
   app.use('/', createHealthRouter());
   app.use('/api/v1/unsubscribe', unsubscribeRouter); // Public route - no auth
-  
+
   // Bull Board UI - Admin queue monitoring
   try {
     const bullBoardAdapter = initializeBullBoard();
@@ -123,7 +127,7 @@ export const createApp = ({
   } catch (error) {
     logger.error({ error }, '❌ Failed to mount Bull Board');
   }
-  
+
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', authMiddleware, userRouter);
   app.use('/api/v1/projects', authMiddleware, projectRouter);
@@ -142,7 +146,7 @@ export const createApp = ({
   app.use('/api/v1/export', authMiddleware, exportRouter);
   app.use('/api/v1/search', authMiddleware, searchRouter);
   app.use('/api/v1/monitoring/queues', authMiddleware, monitoringRouter);
-  
+
   // Week 4 Day 19-20: API Keys & Settings
   app.use('/api/v1/api-keys', authMiddleware, newApiKeysRouter);
   app.use('/api/v1/settings', systemSettingsRouter); // Has public endpoints

@@ -1,4 +1,4 @@
-﻿import { PrismaClient, NotificationStatus } from '@prisma/client';
+﻿import { PrismaClient, NotificationStatus, Prisma } from '@prisma/client';
 
 export interface CreateInAppNotificationInput {
   userId: string;
@@ -15,7 +15,7 @@ export interface ListNotificationsOptions {
 }
 
 export class InAppNotificationService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient) { }
 
   async create(input: CreateInAppNotificationInput) {
     return this.prisma.notification.create({
@@ -24,7 +24,7 @@ export class InAppNotificationService {
         type: input.type,
         title: input.title,
         message: input.message,
-        data: input.data ?? null,
+        data: (input.data as any) ?? Prisma.JsonNull,
       },
     });
   }

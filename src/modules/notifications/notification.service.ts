@@ -496,15 +496,15 @@ export class NotificationService {
           message: `Tamamlanan görevler: ${notification.tasksCompleted}, devam eden: ${notification.tasksInProgress}, geciken: ${notification.tasksOverdue}.`,
         };
       default:
+        // This should be unreachable if all cases are covered
+        const _exhaustiveCheck: never = notification;
         return {
-          title: notification.type,
+          title: 'Unknown Notification',
           message: '',
         };
     }
   }
-  /**
-   * Rate limiting helper
-   */
+
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }

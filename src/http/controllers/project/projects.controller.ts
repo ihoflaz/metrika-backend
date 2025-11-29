@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ProjectStatus } from '@prisma/client';
 import type { ProjectService } from '../../../modules/projects/project.service';
 import { ProjectClosurePDFService } from '../../../modules/projects/project-closure-pdf.service';
-import { validationError } from '../../../common/errors';
+import { badRequestError, validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 import type { AuditService } from '../../../modules/audit/audit.service';
 import type { AuthenticatedRequestUser } from '../../types/auth-context';
@@ -240,19 +240,19 @@ export class ProjectsController {
     const { q: query, limit, status } = req.query;
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      throw validationError('INVALID_SEARCH_QUERY', 'Search query is required');
+      throw badRequestError('INVALID_SEARCH_QUERY', 'Search query is required');
     }
 
     const parsedLimit = limit ? parseInt(limit as string, 10) : 20;
     if (Number.isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-      throw validationError('INVALID_LIMIT', 'Limit must be between 1 and 100');
+      throw badRequestError('INVALID_LIMIT', 'Limit must be between 1 and 100');
     }
 
     const options: { limit: number; status?: ProjectStatus } = { limit: parsedLimit };
 
     if (status && typeof status === 'string') {
       if (!Object.values(ProjectStatus).includes(status as ProjectStatus)) {
-        throw validationError('INVALID_STATUS', 'Invalid project status');
+        throw badRequestError('INVALID_STATUS', 'Invalid project status');
       }
       options.status = status as ProjectStatus;
     }

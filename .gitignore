@@ -67,6 +67,7 @@ docs/
 # Data files (exports, backups, temp data)
 *.csv
 *.sql
+!prisma/migrations/**/*.sql
 *.txt
 audit.csv
 backup.sql

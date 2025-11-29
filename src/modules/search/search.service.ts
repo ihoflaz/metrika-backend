@@ -42,9 +42,11 @@ export interface SearchResponse {
 export class SearchService {
   private prisma: PrismaClient;
   private logger = logger.child({ service: 'SearchService' });
+  private readonly extensionReady: Promise<void>;
 
   constructor() {
     this.prisma = new PrismaClient();
+    this.extensionReady = this.ensureExtensions();
   }
 
   /**
@@ -52,6 +54,7 @@ export class SearchService {
    * Uses pg_trgm similarity() function for fuzzy matching
    */
   async search(options: SearchOptions): Promise<SearchResponse> {
+    await this.extensionReady;
     const {
       query,
       types = ['TASK', 'PROJECT', 'DOCUMENT', 'KPI'],
@@ -111,6 +114,14 @@ export class SearchService {
     };
   }
 
+  private async ensureExtensions() {
+    try {
+      await this.prisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;');
+    } catch (error) {
+      this.logger.warn({ error }, 'Failed to ensure pg_trgm extension');
+    }
+  }
+
   /**
    * Search tasks using fuzzy text matching on title and description
    */
@@ -133,16 +144,16 @@ export class SearchService {
         t."createdAt",
         t."updatedAt",
         GREATEST(
-          similarity(t.title, ${query}),
-          COALESCE(similarity(t.description, ${query}), 0)
+        public.similarity(t.title, ${query}::text),
+        COALESCE(public.similarity(t.description, ${query}::text), 0)
         ) as relevance
       FROM "Task" t
       LEFT JOIN "Project" p ON t."projectId" = p.id
       LEFT JOIN "User" u ON t."ownerId" = u.id
       WHERE 
         (
-          similarity(t.title, ${query}) > ${minSimilarity}
-          OR similarity(t.description, ${query}) > ${minSimilarity}
+          public.similarity(t.title, ${query}::text) > ${minSimilarity}
+          OR public.similarity(t.description, ${query}::text) > ${minSimilarity}
         )
         ${projectId ? Prisma.sql`AND t."projectId" = ${projectId}::uuid` : Prisma.empty}
       ORDER BY relevance DESC
@@ -200,14 +211,14 @@ export class SearchService {
         p."createdAt",
         p."updatedAt",
         GREATEST(
-          similarity(p.name, ${query}),
-          COALESCE(similarity(p.description, ${query}), 0)
+        public.similarity(p.name, ${query}::text),
+        COALESCE(public.similarity(p.description, ${query}::text), 0)
         ) as relevance
       FROM "Project" p
       WHERE 
         (
-          similarity(p.name, ${query}) > ${minSimilarity}
-          OR similarity(p.description, ${query}) > ${minSimilarity}
+          public.similarity(p.name, ${query}::text) > ${minSimilarity}
+          OR public.similarity(p.description, ${query}::text) > ${minSimilarity}
         )
         ${projectId ? Prisma.sql`AND p.id = ${projectId}::uuid` : Prisma.empty}
       ORDER BY relevance DESC
@@ -263,11 +274,11 @@ export class SearchService {
         u."fullName" as "ownerName",
         d."createdAt",
         d."updatedAt",
-        similarity(d.title, ${query}) as relevance
+        public.similarity(d.title, ${query}::text) as relevance
       FROM "Document" d
       LEFT JOIN "Project" p ON d."projectId" = p.id
       LEFT JOIN "User" u ON d."ownerId" = u.id
-      WHERE similarity(d.title, ${query}) > ${minSimilarity}
+      WHERE public.similarity(d.title, ${query}::text) > ${minSimilarity}
         ${projectId ? Prisma.sql`AND d."projectId" = ${projectId}::uuid` : Prisma.empty}
       ORDER BY relevance DESC
       LIMIT ${limit}
@@ -321,18 +332,18 @@ export class SearchService {
         k."createdAt",
         k."updatedAt",
         GREATEST(
-          similarity(k.name, ${query}),
-          similarity(k.code, ${query})
+          public.similarity(k.name, ${query}::text),
+          public.similarity(k.code, ${query}::text)
         ) as relevance
       FROM "KPIDefinition" k
       WHERE 
         (
-          similarity(k.name, ${query}) > ${minSimilarity}
-          OR similarity(k.code, ${query}) > ${minSimilarity}
+          public.similarity(k.name, ${query}::text) > ${minSimilarity}
+          OR public.similarity(k.code, ${query}::text) > ${minSimilarity}
         )
         ${
           projectId
-            ? Prisma.sql`AND ${projectId}::uuid = ANY(k."linkedProjectIds")`
+            ? Prisma.sql`AND k."linkedProjectIds" @> ARRAY[${projectId}]::text[]`
             : Prisma.empty
         }
       ORDER BY relevance DESC

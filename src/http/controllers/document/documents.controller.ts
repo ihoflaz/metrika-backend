@@ -10,7 +10,7 @@ import type {
   DocumentService,
   UploadFilePayload,
 } from '../../../modules/documents/document.service';
-import { validationError } from '../../../common/errors';
+import { badRequestError, validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 import type { AuthenticatedRequestUser } from '../../types/auth-context';
 import type { AuditService } from '../../../modules/audit/audit.service';
@@ -497,12 +497,12 @@ export class DocumentsController {
     const { q: query, limit, projectId } = req.query;
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      return validationError('INVALID_SEARCH_QUERY', 'Search query is required');
+      throw badRequestError('INVALID_SEARCH_QUERY', 'Search query is required');
     }
 
     const parsedLimit = limit ? parseInt(limit as string, 10) : 20;
     if (Number.isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-      return validationError('INVALID_LIMIT', 'Limit must be between 1 and 100');
+      throw badRequestError('INVALID_LIMIT', 'Limit must be between 1 and 100');
     }
 
     const options: { limit: number; projectId?: string } = { limit: parsedLimit };

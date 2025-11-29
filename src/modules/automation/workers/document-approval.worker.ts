@@ -106,18 +106,45 @@ class DocumentApprovalWorker {
         `📨 Sending approval reminder (pending for ${pendingDays} days)`
       );
 
-      // Approval chain implementasyonu basit: document owner'a gönder
-      // TODO (Week 5 - FR-34): Approval chain implementasyonu ile gerçek approver'lara gönder
-      await notificationService.send({
-        type: 'document-approval-reminder',
-        documentId: document.id,
-        documentName: document.title,
-        projectName: document.project.name,
-        approverName: document.owner.fullName,
-        approverEmail: document.owner.email,
-        pendingDays,
-        documentUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/projects/${document.projectId}/documents/${document.id}`,
-      });
+      // Approval chain'i parse et
+      let approvers: any[] = [];
+      try {
+        if (document.currentVersion.approvalChain) {
+          const chain = document.currentVersion.approvalChain as any[];
+          // Henüz onaylamamış olanları bul
+          // Not: Gerçek senaryoda sıralı onay olabilir, burada basitçe tüm bekleyenlere atıyoruz
+          const pendingApprovers = chain.filter(a => a.status === 'PENDING');
+
+          if (pendingApprovers.length > 0) {
+            // User bilgilerini çekmemiz gerekebilir, şimdilik ID'leri alalım
+            const userIds = pendingApprovers.map(a => a.userId);
+            const users = await prisma.user.findMany({
+              where: { id: { in: userIds } }
+            });
+            approvers = users;
+          }
+        }
+      } catch (e) {
+        logger.error({ error: e }, 'Failed to parse approval chain');
+      }
+
+      // Eğer chain yoksa veya parse edilemediyse fallback olarak owner'a gönder
+      if (approvers.length === 0) {
+        approvers.push(document.owner);
+      }
+
+      for (const approver of approvers) {
+        await notificationService.send({
+          type: 'document-approval-reminder',
+          documentId: document.id,
+          documentName: document.title,
+          projectName: document.project.name,
+          approverName: approver.fullName,
+          approverEmail: approver.email,
+          pendingDays,
+          documentUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/projects/${document.projectId}/documents/${document.id}`,
+        });
+      }
     }
   }
 
@@ -137,17 +164,39 @@ class DocumentApprovalWorker {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // 30 günden eski versiyonları bul (verNo < currentVer - 3)
-    // Şimdilik sadece log
+    // 30 günden eski versiyonları bul (current version hariç)
+    const oldVersions = await prisma.documentVersion.findMany({
+      where: {
+        documentId,
+        createdAt: { lt: thirtyDaysAgo },
+        id: { not: document.currentVersionId || '' }, // Current version'ı silme
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // En az son 3 versiyonu sakla (current hariç)
+    if (oldVersions.length <= 3) {
+      return;
+    }
+
+    // Silinecekler: ilk 3'ü atla, gerisini al
+    const versionsToDelete = oldVersions.slice(3);
+
     logger.info(
-      { documentId, title: document.title },
-      '🗑️ Version cleanup placeholder (S3 cleanup will be implemented in Week 5)'
+      { documentId, count: versionsToDelete.length },
+      `🗑️ Cleaning up ${versionsToDelete.length} old document versions`
     );
 
-    // TODO (Week 5): S3'ten eski versiyonları sil
-    // - Mevcut version'dan 3+ eski olanları bul
-    // - S3'ten sil
-    // - Database'den metadata temizle
+    for (const version of versionsToDelete) {
+      // 1. S3'ten sil (Mock)
+      // await storageService.delete(version.storageKey);
+      logger.debug({ key: version.storageKey }, 'Deleted from storage (Mock)');
+
+      // 2. DB'den sil
+      await prisma.documentVersion.delete({
+        where: { id: version.id }
+      });
+    }
   }
 
   /**
@@ -167,10 +216,10 @@ class DocumentApprovalWorker {
     }
 
     logger.info(
-      { 
-        documentId, 
-        title: document.title, 
-        sizeBytes: document.currentVersion?.sizeBytes 
+      {
+        documentId,
+        title: document.title,
+        sizeBytes: document.currentVersion?.sizeBytes
       },
       '🛡️ Virus scan placeholder (ClamAV integration in Week 8)'
     );

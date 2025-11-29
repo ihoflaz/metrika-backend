@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { getSearchService, type SearchResultType } from '../../../modules/search/search.service';
 import { logger } from '../../../lib/logger';
-import { validationError } from '../../../common/errors';
+import { badRequestError, validationError } from '../../../common/errors';
 import type { AuthenticatedRequestUser } from '../../types/auth-context';
 
 const searchQuerySchema = z.object({
@@ -38,7 +38,12 @@ export async function search(req: Request, res: Response, next: NextFunction) {
     // Validate query parameters
     const validation = searchQuerySchema.safeParse(req.query);
     if (!validation.success) {
-      throw validationError(validation.error.flatten().fieldErrors);
+      throw badRequestError(
+        'VALIDATION_ERROR',
+        'Validation failed',
+        undefined,
+        validation.error.flatten().fieldErrors,
+      );
     }
 
     const { q: query, type, projectId, limit, minSimilarity } = validation.data;
@@ -55,10 +60,11 @@ export async function search(req: Request, res: Response, next: NextFunction) {
     if (type) {
       const invalidTypes = type.filter((t) => !validTypes.includes(t as SearchResultType));
       if (invalidTypes.length > 0) {
-        throw validationError({
-          message: `Invalid search type(s): ${invalidTypes.join(', ')}`,
-          path: 'type',
-        });
+        throw badRequestError(
+          'VALIDATION_ERROR',
+          'Invalid search type',
+          `Invalid search type(s): ${invalidTypes.join(', ')}`,
+        );
       }
       types = type as SearchResultType[];
     }

@@ -785,11 +785,7 @@ export class DocumentService {
     const limit = options?.limit || 20;
 
     // Convert search query to tsquery format (replace spaces with &)
-    const tsQuery = query
-      .trim()
-      .split(/\s+/)
-      .filter((word) => word.length > 0)
-      .join(' & ');
+    const tsQuery = query.trim();
 
     // Build SQL query with full-text search ranking
     const sql = `
@@ -802,7 +798,7 @@ export class DocumentService {
         d."tags",
         d."createdAt",
         d."updatedAt",
-        ts_rank(d."searchVector", to_tsquery('english', $1)) as rank,
+        ts_rank(d."search_vector", websearch_to_tsquery('english', $1)) as rank,
         jsonb_build_object(
           'id', u."id",
           'fullName', u."fullName",
@@ -816,8 +812,8 @@ export class DocumentService {
       FROM "Document" d
       INNER JOIN "User" u ON d."ownerId" = u."id"
       INNER JOIN "Project" p ON d."projectId" = p."id"
-      WHERE d."searchVector" @@ to_tsquery('english', $1)
-        ${options?.projectId ? 'AND d."projectId" = $2' : ''}
+      WHERE d."search_vector" @@ websearch_to_tsquery('english', $1)
+        ${options?.projectId ? 'AND d."projectId" = $2::uuid' : ''}
       ORDER BY rank DESC, d."updatedAt" DESC
       LIMIT ${limit}
     `;
@@ -848,4 +844,3 @@ export class DocumentService {
     return results;
   }
 }
-

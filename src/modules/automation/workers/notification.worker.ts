@@ -143,7 +143,7 @@ class NotificationWorker {
         type: data.template,
         title,
         message,
-        data: (data.payload.data as Record<string, unknown> | undefined) ?? data.payload,
+        data: ((data.payload.data as Record<string, unknown> | undefined) ?? data.payload) as any,
       },
     });
 

@@ -1,6 +1,5 @@
 import { PrismaClient, TaskStatus, TaskPriority } from '@prisma/client';
 import { createLogger } from '../../lib/logger';
-import { prisma } from '../../db/prisma-client';
 
 const logger = createLogger({ name: 'KanbanService' });
 
@@ -50,8 +49,8 @@ export interface GanttTask {
 export class KanbanService {
   private readonly prisma: PrismaClient;
 
-  constructor(prismaClient?: PrismaClient) {
-    this.prisma = prismaClient || prisma;
+  constructor(prismaClient: PrismaClient) {
+    this.prisma = prismaClient;
   }
 
   /**
@@ -355,5 +354,5 @@ export class KanbanService {
   }
 }
 
-export const kanbanService = new KanbanService();
+
 

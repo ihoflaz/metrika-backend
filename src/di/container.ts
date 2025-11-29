@@ -52,7 +52,6 @@ import { WebhookController } from '../http/controllers/notifications/webhook.con
 import { KanbanController } from '../http/controllers/project/kanban.controller';
 import { createAuthRouter } from '../http/routes/auth.routes';
 import { createUserRouter } from '../http/routes/user.routes';
-import { createApiKeysRouter } from '../http/routes/user/api-keys.routes';
 import { createApiKeyRoutes } from '../http/routes/apikey/apikey.routes';
 import { createSystemSettingsRoutes } from '../http/routes/settings/settings.routes';
 import { createUserPreferencesRoutes } from '../http/routes/preferences/preferences.routes';
@@ -132,7 +131,6 @@ export interface AppDependencies {
   searchService: SearchService;
   authRouter: Router;
   userRouter: Router;
-  apiKeysRouter: Router;
   newApiKeysRouter: Router;
   systemSettingsRouter: Router;
   userPreferencesRouter: Router;
@@ -169,13 +167,13 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
     logger: asFunction(({ config }: Pick<AppDependencies, 'config'>) =>
       createLogger({ level: config.LOG_LEVEL }),
     ).singleton(),
-    prisma: testPrisma 
+    prisma: testPrisma
       ? asValue(testPrisma)
       : asFunction(({ config }: Pick<AppDependencies, 'config'>) => createPrismaClient(config))
-          .singleton()
-          .disposer(async (client) => {
-            await client.$disconnect();
-          }),
+        .singleton()
+        .disposer(async (client) => {
+          await client.$disconnect();
+        }),
     tokenService: asFunction(
       ({ config }: Pick<AppDependencies, 'config'>) => new TokenService(config),
     ).singleton(),
@@ -446,7 +444,6 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
     authRouter: asFunction(({ authController }: Pick<AppDependencies, 'authController'>) =>
       createAuthRouter(authController),
     ).singleton(),
-    apiKeysRouter: asFunction((deps: AppDependencies) => createApiKeysRouter(deps)).singleton(),
     newApiKeysRouter: asFunction(
       ({ newApiKeyController }: Pick<AppDependencies, 'newApiKeyController'>) =>
         createApiKeyRoutes(newApiKeyController),
@@ -465,8 +462,9 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
       }: Pick<AppDependencies, 'userPreferencesController' | 'authMiddleware'>) =>
         createUserPreferencesRoutes(userPreferencesController, authMiddleware),
     ).singleton(),
-    userRouter: asFunction(({ usersController, apiKeysRouter }: Pick<AppDependencies, 'usersController' | 'apiKeysRouter'>) =>
-      createUserRouter({ usersController, apiKeysRouter }),
+    userRouter: asFunction(
+      ({ usersController, apiKeysController }: Pick<AppDependencies, 'usersController' | 'apiKeysController'>) =>
+        createUserRouter({ usersController, apiKeysController }),
     ).singleton(),
     projectRouter: asFunction(
       ({ projectsController, projectCloneController, kanbanController }: Pick<AppDependencies, 'projectsController' | 'projectCloneController' | 'kanbanController'>) =>
@@ -570,7 +568,7 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
         | 'reportsRouter'
         | 'auditRouter'
         | 'queueRouter'
-        | 'kanbanRouter'
+        | 'queueRouter'
         | 'exportRouter'
         | 'monitoringRouter'
         | 'unsubscribeRouter'
@@ -609,7 +607,7 @@ export const buildContainer = (testPrisma?: PrismaClient): AwilixContainer<AppDe
           notificationsRouter,
           webhookRouter,
           authMiddleware,
-        }),
+        } as any),
     ).singleton(),
   });
 

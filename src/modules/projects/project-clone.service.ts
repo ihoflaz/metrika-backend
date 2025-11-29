@@ -48,7 +48,7 @@ export class ProjectCloneService {
     private prisma: PrismaClient,
     private auditService: AuditService,
     private documentStorage: DocumentStorageService,
-  ) {}
+  ) { }
 
   /**
    * Clone a project with all related data
@@ -209,7 +209,7 @@ export class ProjectCloneService {
     actorId: string,
   ): Promise<{ taskCount: number; taskIdMapping: Map<string, string> }> {
     const taskIdMapping = new Map<string, string>();
-    
+
     // Build task hierarchy
     const taskMap = new Map<string, TaskWithChildren>();
     const rootTasks: TaskWithChildren[] = [];
@@ -393,7 +393,7 @@ export class ProjectCloneService {
             mimeType: version.mimeType,
             storageKey: targetKey,
             virusScanStatus: version.virusScanStatus,
-            approvalChain: version.approvalChain,
+            approvalChain: version.approvalChain as any,
             createdBy: actorId,
           },
         });

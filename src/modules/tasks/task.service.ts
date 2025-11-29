@@ -382,11 +382,7 @@ export class TaskService {
     const limit = options?.limit || 20;
 
     // Convert search query to tsquery format
-    const tsQuery = query
-      .trim()
-      .split(/\s+/)
-      .filter((word) => word.length > 0)
-      .join(' & ');
+    const tsQuery = query.trim();
 
     // Build SQL query with full-text search ranking
     let sql = `
@@ -403,7 +399,7 @@ export class TaskService {
         t."plannedEnd",
         t."createdAt",
         t."updatedAt",
-        ts_rank(t."searchVector", to_tsquery('english', $1)) as rank,
+        ts_rank(t."search_vector", websearch_to_tsquery('english', $1)) as rank,
         jsonb_build_object(
           'id', o."id",
           'fullName', o."fullName",
@@ -417,20 +413,20 @@ export class TaskService {
       FROM "Task" t
       INNER JOIN "User" o ON t."ownerId" = o."id"
       INNER JOIN "Project" p ON t."projectId" = p."id"
-      WHERE t."searchVector" @@ to_tsquery('english', $1)
+      WHERE t."search_vector" @@ websearch_to_tsquery('english', $1)
     `;
 
     const params: Array<string> = [tsQuery];
     let paramIndex = 2;
 
     if (options?.projectId) {
-      sql += ` AND t."projectId" = $${paramIndex}`;
+      sql += ` AND t."projectId" = $${paramIndex}::uuid`;
       params.push(options.projectId);
       paramIndex++;
     }
 
     if (options?.status) {
-      sql += ` AND t."status" = $${paramIndex}`;
+      sql += ` AND t."status" = $${paramIndex}::"TaskStatus"`;
       params.push(options.status);
       paramIndex++;
     }

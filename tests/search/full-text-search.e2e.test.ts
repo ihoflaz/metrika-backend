@@ -349,7 +349,8 @@ describe('Full-Text Search (Day 15)', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_SEARCH_QUERY');
+      const error = res.body.errors?.[0];
+      expect(error?.code).toBe('INVALID_SEARCH_QUERY');
 
       console.log('✅ Empty query validation working');
     });
@@ -361,7 +362,8 @@ describe('Full-Text Search (Day 15)', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_LIMIT');
+      const error = res.body.errors?.[0];
+      expect(error?.code).toBe('INVALID_LIMIT');
 
       console.log('✅ Limit validation working');
     });

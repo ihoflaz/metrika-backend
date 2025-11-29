@@ -191,7 +191,8 @@ describe('Email Template Service', () => {
       await emailTemplateService.renderEmail('task-delayed', data);
       const duration2 = Date.now() - start2;
 
-      expect(duration2).toBeLessThanOrEqual(duration1);
+      const allowableJitterMs = 5; // timer granularity + IO jitter
+      expect(duration2).toBeLessThanOrEqual(duration1 + allowableJitterMs);
     });
 
     test('should clear cache', () => {

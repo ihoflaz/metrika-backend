@@ -411,11 +411,7 @@ export class ProjectService {
     const limit = options?.limit || 20;
 
     // Convert search query to tsquery format
-    const tsQuery = query
-      .trim()
-      .split(/\s+/)
-      .filter((word) => word.length > 0)
-      .join(' & ');
+    const tsQuery = query.trim();
 
     // Build SQL query with full-text search ranking
     let sql = `
@@ -432,7 +428,7 @@ export class ProjectService {
         p."budgetPlanned",
         p."createdAt",
         p."updatedAt",
-        ts_rank(p."searchVector", to_tsquery('english', $1)) as rank,
+        ts_rank(p."search_vector", websearch_to_tsquery('english', $1)) as rank,
         jsonb_build_object(
           'id', s."id",
           'fullName', s."fullName",
@@ -446,13 +442,13 @@ export class ProjectService {
       FROM "Project" p
       INNER JOIN "User" s ON p."sponsorId" = s."id"
       LEFT JOIN "User" pm ON p."pmoOwnerId" = pm."id"
-      WHERE p."searchVector" @@ to_tsquery('english', $1)
+      WHERE p."search_vector" @@ websearch_to_tsquery('english', $1)
     `;
 
     const params: Array<string> = [tsQuery];
 
     if (options?.status) {
-      sql += ` AND p."status" = $2`;
+      sql += ` AND p."status" = $2::"ProjectStatus"`;
       params.push(options.status);
     }
 

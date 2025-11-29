@@ -100,4 +100,58 @@ describe('In-app Notifications API', () => {
     expect(record?.status).toBe(NotificationStatus.ARCHIVED);
     expect(record?.archivedAt).toBeTruthy();
   });
+
+  it('supports status filters and pagination metadata', async () => {
+    await context.prisma.notification.createMany({
+      data: [
+        {
+          id: '33333333-3333-3333-3333-333333333333',
+          userId,
+          type: 'task-comment',
+          title: 'Yorum eklendi',
+          message: 'Göreve yorum eklendi',
+          status: NotificationStatus.READ,
+        },
+        {
+          id: '44444444-4444-4444-4444-444444444444',
+          userId,
+          type: 'task-comment',
+          title: 'İkinci yorum',
+          message: 'Bir yorum daha',
+          status: NotificationStatus.READ,
+        },
+        {
+          id: '55555555-5555-5555-5555-555555555555',
+          userId,
+          type: 'task-comment',
+          title: 'Arşiv deneme',
+          message: 'Arşive atılacak',
+          status: NotificationStatus.ARCHIVED,
+        },
+      ],
+    });
+
+    const { status, body } = await context.httpClient
+      .get('/api/v1/notifications?status=READ&limit=1&page=2')
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(status).toBe(200);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].attributes.status).toBe('READ');
+    expect(body.meta.pagination).toMatchObject({
+      page: 2,
+      limit: 1,
+      total: 2,
+      totalPages: 2,
+    });
+  });
+
+  it('returns 422 for invalid query parameters', async () => {
+    const { status, body } = await context.httpClient
+      .get('/api/v1/notifications?status=INVALID&page=0&limit=500')
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(status).toBe(422);
+    expect(body.errors?.[0]?.code).toBe('VALIDATION_FAILED');
+  });
 });

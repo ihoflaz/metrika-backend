@@ -204,11 +204,11 @@ class KpiMonitorWorker {
       `📊 Project health score calculated: ${healthScore}/100`
     );
 
-    // TODO: Project.healthScore field'ına kaydet (şu an schema'da yok)
-    // await prisma.project.update({
-    //   where: { id: projectId },
-    //   data: { healthScore }
-    // });
+    // Project.healthScore field'ına kaydet
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { healthScore }
+    });
   }
 
   /**

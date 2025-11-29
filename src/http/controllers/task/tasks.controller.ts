@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { TaskPriority, TaskStatus, TaskDependencyType } from '@prisma/client';
 import type { TaskService } from '../../../modules/tasks/task.service';
 import type { DocumentService } from '../../../modules/documents/document.service';
-import { validationError } from '../../../common/errors';
+import { badRequestError, validationError } from '../../../common/errors';
 import { getRequestId } from '../../middleware/request-context';
 import type { AuditService } from '../../../modules/audit/audit.service';
 import type { AuthenticatedRequestUser } from '../../types/auth-context';
@@ -357,12 +357,12 @@ export class TasksController {
     const { q: query, limit, projectId, status } = req.query;
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      return validationError('INVALID_SEARCH_QUERY', 'Search query is required');
+      throw badRequestError('INVALID_SEARCH_QUERY', 'Search query is required');
     }
 
     const parsedLimit = limit ? parseInt(limit as string, 10) : 20;
     if (Number.isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-      return validationError('INVALID_LIMIT', 'Limit must be between 1 and 100');
+      throw badRequestError('INVALID_LIMIT', 'Limit must be between 1 and 100');
     }
 
     const options: { limit: number; projectId?: string; status?: TaskStatus } = {
@@ -375,7 +375,7 @@ export class TasksController {
 
     if (status && typeof status === 'string') {
       if (!Object.values(TaskStatus).includes(status as TaskStatus)) {
-        return validationError('INVALID_STATUS', 'Invalid task status');
+        throw badRequestError('INVALID_STATUS', 'Invalid task status');
       }
       options.status = status as TaskStatus;
     }

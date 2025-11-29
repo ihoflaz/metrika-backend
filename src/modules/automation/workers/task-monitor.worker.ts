@@ -192,6 +192,7 @@ class TaskMonitorWorker {
       where: { id: taskId },
       include: {
         owner: true,
+        project: true,
       },
     });
 
@@ -218,13 +219,13 @@ class TaskMonitorWorker {
 
       // Escalation level'a göre bildirim gönder
       const escalationLevel = daysUntilDeadline === 0 ? 'critical' : 'warning';
-      
+
       // Task owner'a bildirim
       await notificationService.send({
         type: 'task-delayed',
         taskId: task.id,
         taskTitle: task.title,
-        projectName: '', // TODO: Project name ekle
+        projectName: task.project?.name || '',
         ownerName: task.owner.fullName,
         ownerEmail: task.owner.email,
         delayDays: -daysUntilDeadline, // Negatif değer = henüz gecikmemiş ama yaklaşıyor

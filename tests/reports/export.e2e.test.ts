@@ -1,12 +1,25 @@
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
-import request from 'supertest';
-import { setupTestApp, teardownTestApp } from '../utils/test-app';
 import { randomUUID } from 'crypto';
+import { setupTestApp, teardownTestApp } from '../utils/test-app';
+
+const ADMIN_EMAIL = 'admin@metrika.local';
+const ADMIN_PASSWORD = 'ChangeMeNow123!';
+
+function binaryParser(res: any, callback: any) {
+  res.setEncoding('binary');
+  res.data = '';
+  res.on('data', (chunk: string) => {
+    res.data += chunk;
+  });
+  res.on('end', () => {
+    callback(null, Buffer.from(res.data, 'binary'));
+  });
+}
 
 describe('Export E2E Tests', () => {
   let testContext: any;
   let adminToken: string;
-  let testUser: any;
+  let adminUser: any;
   let testProject: any;
   let testKPI: any;
 
@@ -15,25 +28,20 @@ describe('Export E2E Tests', () => {
     const httpClient = testContext.httpClient;
     const prisma = testContext.prisma;
 
-    // Create admin user with role
-    const adminRole = await prisma.role.findFirst({ where: { name: 'ADMIN' } });
-    
-    testUser = await prisma.user.create({
-      data: {
-        id: randomUUID(),
-        email: `admin-export-${randomUUID()}@test.com`,
-        passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$test$test', // dummy hash
-        fullName: 'Export Test Admin',
-        userRoles: {
-          create: {
-            roleId: adminRole!.id,
-          },
-        },
-      },
+    adminUser = await prisma.user.findUniqueOrThrow({
+      where: { email: ADMIN_EMAIL },
     });
 
-    // Login to get token (mock - just create token manually)
-    adminToken = 'mock-admin-token-for-export-tests';
+    const { status: loginStatus, body: loginBody } = await httpClient.post('/api/v1/auth/login').send({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+
+    if (loginStatus !== 200) {
+      throw new Error(`Unable to log in seeded admin user for export tests (status ${loginStatus})`);
+    }
+
+    adminToken = loginBody.data.attributes.accessToken;
 
     // Create test project
     testProject = await prisma.project.create({
@@ -45,16 +53,17 @@ describe('Export E2E Tests', () => {
         status: 'ACTIVE',
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        owner: { connect: { id: testUser.id } },
-        progress: 50,
+        sponsor: { connect: { id: adminUser.id } },
       },
     });
 
     // Create test KPI
+    const kpiCode = `KPI-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
     testKPI = await prisma.kPIDefinition.create({
       data: {
         id: randomUUID(),
-        code: `KPI-TEST-${Date.now()}`,
+        code: kpiCode,
         name: 'Test Export KPI',
         description: 'Test KPI for export',
         category: 'FINANCIAL',
@@ -64,7 +73,7 @@ describe('Export E2E Tests', () => {
         aggregationPeriod: 'MONTHLY',
         dataSourceType: 'MANUAL',
         status: 'ACTIVE',
-        stewardId: testUser.id,
+        stewardId: adminUser.id,
       },
     });
 
@@ -89,7 +98,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/reports/portfolio-summary/export - should export Excel file', async () => {
     const res = await testContext.httpClient
       .get('/api/v1/reports/portfolio-summary/export')
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe(
@@ -104,7 +115,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/reports/kpi-dashboard/export - should export Excel file', async () => {
     const res = await testContext.httpClient
       .get('/api/v1/reports/kpi-dashboard/export')
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe(
@@ -119,7 +132,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/reports/task-metrics/export - should export Excel file', async () => {
     const res = await testContext.httpClient
       .get('/api/v1/reports/task-metrics/export')
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe(
@@ -134,7 +149,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/kpis/:kpiId/export - should export single KPI Excel file', async () => {
     const res = await testContext.httpClient
       .get(`/api/v1/kpis/${testKPI.id}/export`)
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe(
@@ -149,7 +166,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/reports/portfolio-summary/export/pdf - should export PDF file', async () => {
     const res = await testContext.httpClient
       .get('/api/v1/reports/portfolio-summary/export/pdf')
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('application/pdf');
@@ -162,7 +181,9 @@ describe('Export E2E Tests', () => {
   test('GET /api/v1/reports/kpi-dashboard/export/pdf - should export PDF file', async () => {
     const res = await testContext.httpClient
       .get('/api/v1/reports/kpi-dashboard/export/pdf')
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('application/pdf');
